@@ -6,12 +6,29 @@
 **自动化构建 GKI 内核 | 集成 KernelSU + SUSFS**
 
 [![Release](https://img.shields.io/github/v/release/coolzyd9107/GKI_KernelSU_SUSFS?label=Release&style=flat-square&logo=github&logoColor=white&color=2ea44f)](https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases)
+[![Telegram](https://img.shields.io/static/v1?label=Telegram&message=Channel&color=0088cc)](https://t.me/UnofficialReSukiSUGKI)
 [![KernelSU](https://img.shields.io/badge/KernelSU-Supported-5AA300?style=flat-square)](https://kernelsu.org/)
 [![SUSFS](https://img.shields.io/badge/SUSFS-Integrated-E67E22?style=flat-square)](https://gitlab.com/simonpunk/susfs4ksu)
 
 ---
 
 </div>
+
+## ⚠️ 仓库须知 ⚠️
+
+① 本仓库分叉自 [zzh20188/GKI_KernelSU_SUSFS](https://github.com/zzh20188/GKI_KernelSU_SUSFS/) 本人只进行了部分修改与问题修复，请各位使用者优先考虑分叉原始仓库。
+
+② 本仓库只提供ReSukiSU的预构建内核，对于其它KernelSU分支，请分叉本仓库或 [zzh20188/GKI_KernelSU_SUSFS](https://github.com/zzh20188/GKI_KernelSU_SUSFS/) 然后自行构建。
+
+## 💰 特别鸣谢
+
+[coolzyd9107](https://github.com/coolzyd9107)：仓库的创建者和所有者，但他是一个大fèiwù，很多东西都不会
+
+[zzh20188](https://github.com/zzh20188)：他是本仓库的上游仓库作者
+
+[zhuzhuzihan](https://github.com/zhuzhuzihan)：协助进行了大量修复和修改
+
+[TanakaLun](https://github.com/TanakaLun)：协助进行了大量修复和修改
 
 ## 🚀 快速导航
 
