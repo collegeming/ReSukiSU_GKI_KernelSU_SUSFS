@@ -628,6 +628,10 @@ jobs:
               if [[ "$CURRENT_SUB" -le 117 ]]; then
                 cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/fdinfo.c.patch ./
                 patch -p1 < fdinfo.c.patch || true
+                # 修复 5.10.x ≤ 117 内核缺少 inotify_mark_user_mask 函数的编译错误
+                # SUSFS v2.0.0 在 fdinfo.c 中引入了此函数, 但该函数在 5.10.117 及以下内核版本中不存在
+                # 使用等效表达式 mark->mask & IN_ALL_EVENTS 替代
+                sed -i 's/inotify_mark_user_mask(mark)/mark->mask \& IN_ALL_EVENTS/g' ./fs/notify/fdinfo.c
               fi
               if [[ "$CURRENT_SUB" -le 43 ]]; then
                 cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/base.c.patch ./
