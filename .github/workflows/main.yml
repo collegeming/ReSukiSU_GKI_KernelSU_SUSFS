@@ -578,7 +578,7 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          TAG=$NEW_TAG
-          REPO=$KSU_URL
+          export TAG=$NEW_TAG
+          export REPO=$KSU_URL
           curl -Ls https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/raw/main/upload -o upload
           chmod +x upload && ./upload
