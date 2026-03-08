@@ -882,12 +882,15 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
           EOF
 
+          # 移除 defconfig 检查
+          sed -i 's/check_defconfig//' ./common/build.config.gki
+
+      - name: 启用kpm
+        if: inputs.use_kpm
+        run: |
           if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
             echo "CONFIG_KPM=y" >> "$DEFCONFIG"
           fi
-
-          # 移除 defconfig 检查
-          sed -i 's/check_defconfig//' ./common/build.config.gki
 
       # ==================== 添加 SUSFS 配置 ====================
       # 启用 SUSFS 各项隐藏功能
