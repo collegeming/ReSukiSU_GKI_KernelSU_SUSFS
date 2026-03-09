@@ -24,7 +24,7 @@ jobs:
           TEXT=$(cat <<EOF
           <b>New Release Pushed:</b>
           
-          Branch: <code> main </code>
+          Branch: <code>main</code>
           Tag: <code>${NEW_TAG}</code>
           
           Features: 
