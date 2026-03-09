@@ -23,8 +23,13 @@ jobs:
 
           TEXT=$(cat <<EOF
           <b>New Release Pushed:</b>
+          Branch: main
           Release Tag: <code>${NEW_TAG}</code>
           Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
+          Change Log: 
+          <pre>
+          test
+          </pre>
           EOF
           )
 
