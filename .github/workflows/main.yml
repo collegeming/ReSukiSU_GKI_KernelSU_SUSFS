@@ -586,6 +586,7 @@ jobs:
           Change Log: 
           <pre>${INPUT_CHANGE_LOG}
           </pre>
+          
           Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
 
           Note: The "commit" here is manually provided.
