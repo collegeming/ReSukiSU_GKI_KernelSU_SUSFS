@@ -25,6 +25,7 @@ jobs:
           <b>New Release Pushed:</b>
           
           Branch: <code>main</code>
+          Commit: $input.commit
           Tag: <code>${NEW_TAG}</code>
           
           Features: 
@@ -35,8 +36,7 @@ jobs:
           Built-in KPM = false
           KPatch-Next Support =true</pre>
           Change Log: 
-          <pre>Nothing Changed
-          Nothing Changed
+          <pre>$input.change_log
           </pre>
           Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
           EOF
