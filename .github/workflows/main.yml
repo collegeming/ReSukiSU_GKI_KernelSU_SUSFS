@@ -582,7 +582,7 @@ jobs:
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
           Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
-          KPatch-Next Support = ${{ inputs.kernelsu_variant == 'Next' && 'true' || 'false' }}</pre>
+          KPatch-Next Support = true</pre>
           Change Log: 
           <pre>${INPUT_CHANGE_LOG}
           </pre>
