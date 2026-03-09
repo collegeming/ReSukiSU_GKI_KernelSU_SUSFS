@@ -2,6 +2,15 @@ name: 发送 Telegram 通知
 
 on:
   workflow_dispatch:
+    inputs:
+      commit:
+        description: "Commit (sha 或描述)"
+        required: true
+        type: string
+      change_log:
+        description: "Change log"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -20,12 +29,14 @@ jobs:
           set -euo pipefail
 
           NEW_TAG="${GITHUB_REF_NAME}"
+          INPUT_COMMIT="${{ github.event.inputs.commit }}"
+          INPUT_CHANGE_LOG="${{ github.event.inputs.change_log }}"
 
           TEXT=$(cat <<EOF
           <b>New Release Pushed:</b>
           
           Branch: <code>main</code>
-          Commit: $input.commit
+          Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
           
           Features: 
@@ -36,7 +47,7 @@ jobs:
           Built-in KPM = false
           KPatch-Next Support =true</pre>
           Change Log: 
-          <pre>$input.change_log
+          <pre>${INPUT_CHANGE_LOG}
           </pre>
           Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
           EOF
@@ -45,4 +56,4 @@ jobs:
           curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             -d chat_id="${CHAT_ID}" \
             -d parse_mode="HTML" \
-            -d text="${TEXT}"
+            --data-urlencode text="${TEXT}"
