@@ -26,7 +26,6 @@ jobs:
           
           Branch: main
           Release Tag: <code>${NEW_TAG}</code>
-          Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
           
           Features: 
           <pre>ReSukiSU = true
@@ -34,12 +33,12 @@ jobs:
           BBG=false
           LZ4KD = false
           Built-in KPM = false
-          KPatch-Next Support =true
-          </pre>
+          KPatch-Next Support =true</pre>
           Change Log: 
           <pre>Nothing Changed
           Nothing Changed
           </pre>
+          Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
           EOF
           )
 
