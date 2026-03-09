@@ -30,7 +30,7 @@ jobs:
           Features: 
           <pre>ReSukiSU = true
           SuSFS = true
-          BBG=false
+          BBG = false
           LZ4KD = false
           Built-in KPM = false
           KPatch-Next Support =true</pre>
