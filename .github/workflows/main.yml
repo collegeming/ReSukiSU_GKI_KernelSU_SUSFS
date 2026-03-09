@@ -105,7 +105,13 @@ on:
         description: "构建全部版本"
         type: boolean
         default: true
-
+  #=================== Bot-Push选项 ===================
+      change_log:
+        description: "Change Log (可选，支持多行)"
+        type: string
+        default: ""
+        required: true
+      
 jobs:
   # ==================== 获取管理器 ====================
   # 下载最新的 KernelSU 管理器 APK 和 SUSFS 模块
