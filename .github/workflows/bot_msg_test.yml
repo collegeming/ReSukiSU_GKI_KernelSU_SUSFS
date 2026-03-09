@@ -51,7 +51,6 @@ jobs:
           </pre>
           Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
 
-          注意: 这里的"commit"指的是ReSukiSU的commit而不是本仓库的
           Note: The "commit" here refers to ReSukiSU's commit, not this repository's.
           EOF
           )
