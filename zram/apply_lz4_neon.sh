@@ -22,10 +22,10 @@ already_patched() {
 # 模式一致：int out_len = LZ4_decompress_safe(src, dst, slen, *dlen);
 for file in crypto/lz4.c crypto/lz4hc.c; do
   if [ ! -f "$file" ]; then
-    echo "跳过（不存在）: $file"; ((SKIPPED++)); continue
+    echo "跳过（不存在）: $file"; ((SKIPPED++)) || true; continue
   fi
   if already_patched "$file"; then
-    echo "跳过（已修补）: $file"; ((SKIPPED++)); continue
+    echo "跳过（已修补）: $file"; ((SKIPPED++)) || true; continue
   fi
 
   perl -i -pe '
@@ -40,9 +40,9 @@ for file in crypto/lz4.c crypto/lz4hc.c; do
   ' "$file"
 
   if already_patched "$file"; then
-    echo "已修补: $file"; ((PATCHED++))
+    echo "已修补: $file"; ((PATCHED++)) || true
   else
-    echo "::error::修补失败: $file"; ((FAILED++))
+    echo "::error::修补失败: $file"; ((FAILED++)) || true
   fi
 done
 
@@ -50,9 +50,9 @@ done
 # 将 LZ4_decompress_safe(dic->cbuf->cdata, ...) 替换为条件编译版本
 file="fs/f2fs/compress.c"
 if [ ! -f "$file" ]; then
-  echo "跳过（不存在）: $file"; ((SKIPPED++))
+  echo "跳过（不存在）: $file"; ((SKIPPED++)) || true
 elif already_patched "$file"; then
-  echo "跳过（已修补）: $file"; ((SKIPPED++))
+  echo "跳过（已修补）: $file"; ((SKIPPED++)) || true
 else
   perl -i -0777 -pe '
     s{(\t)ret = LZ4_decompress_safe\(dic->cbuf->cdata, dic->rbuf,\s*\n\s*dic->clen, dic->rlen\);}
@@ -60,18 +60,18 @@ else
   ' "$file"
 
   if already_patched "$file"; then
-    echo "已修补: $file"; ((PATCHED++))
+    echo "已修补: $file"; ((PATCHED++)) || true
   else
-    echo "::error::修补失败: $file"; ((FAILED++))
+    echo "::error::修补失败: $file"; ((FAILED++)) || true
   fi
 fi
 
 # ---- 3. fs/incfs/data_mgmt.c（部分内核版本才有） ----
 file="fs/incfs/data_mgmt.c"
 if [ ! -f "$file" ]; then
-  echo "跳过（不存在）: $file"; ((SKIPPED++))
+  echo "跳过（不存在）: $file"; ((SKIPPED++)) || true
 elif already_patched "$file"; then
-  echo "跳过（已修补）: $file"; ((SKIPPED++))
+  echo "跳过（已修补）: $file"; ((SKIPPED++)) || true
 else
   perl -i -0777 -pe '
     s{(\t+)result = LZ4_decompress_safe\(src\.data, dst\.data, src\.len,\s*\n\s*dst\.len\);}
@@ -79,9 +79,9 @@ else
   ' "$file"
 
   if already_patched "$file"; then
-    echo "已修补: $file"; ((PATCHED++))
+    echo "已修补: $file"; ((PATCHED++)) || true
   else
-    echo "::error::修补失败: $file"; ((FAILED++))
+    echo "::error::修补失败: $file"; ((FAILED++)) || true
   fi
 fi
 

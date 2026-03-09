@@ -853,7 +853,6 @@ jobs:
           # android14/15：从 modules.bzl 移除 zram/zsmalloc 模块声明
           if [ "${{ inputs.android_version }}" = "android14" ] || [ "${{ inputs.android_version }}" = "android15" ]; then
             sed -i 's/"drivers\/block\/zram\/zram\.ko",//g; s/"mm\/zsmalloc\.ko",//g' "$KERNEL_ROOT/common/modules.bzl"
-            echo "CONFIG_MODULE_SIG_FORCE=n" >> "$CONFIG_FILE"
           fi
 
           # 启用压缩算法（使用独立 fragment 文件）
