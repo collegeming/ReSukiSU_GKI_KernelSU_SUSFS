@@ -62,6 +62,7 @@ on:
         type: string
         default: "Sun Dec 01 08:10:00 UTC 2024"
         required: false
+
       # ==================== 功能开关 ====================
       use_zram:
         description: "启用 ZRAM 增强算法"
@@ -105,13 +106,19 @@ on:
         description: "构建全部版本"
         type: boolean
         default: true
-  #=================== Bot-Push选项 ===================
+
+      # ==================== Bot-Push 选项 ====================
+      commit:
+        description: "Commit (sha 或描述)"
+        type: string
+        default: ""
+        required: true
       change_log:
         description: "Change Log (可选，支持多行)"
         type: string
         default: ""
         required: true
-      
+
 jobs:
   # ==================== 获取管理器 ====================
   # 下载最新的 KernelSU 管理器 APK 和 SUSFS 模块
@@ -268,7 +275,6 @@ jobs:
       # 预计算各种显示名称，简化后续引用
       - name: 设置显示名称
         run: |
-          # KSU 显示名称
           case "${{ inputs.kernelsu_variant }}" in
             "Next")      KSU_NAME="KernelSU-Next" ;;
             "Official")  KSU_NAME="KernelSU" ;;
@@ -278,26 +284,22 @@ jobs:
           esac
           echo "KSU_NAME=$KSU_NAME" >> $GITHUB_ENV
 
-          # 版本信息
           KSU_VER="${{ needs.get-manager.outputs.ksuVer }}"
           SUS_VER="${{ needs.get-manager.outputs.susVer }}"
           echo "KSU_VER=$KSU_VER" >> $GITHUB_ENV
           echo "SUS_VER=$SUS_VER" >> $GITHUB_ENV
 
-          # 功能开关显示
           echo "LZ4_STATUS=${{ inputs.use_zram && '开启' || '未开启' }}" >> $GITHUB_ENV
           echo "BBG_STATUS=${{ inputs.use_bbg && '支持' || '不支持' }}" >> $GITHUB_ENV
           echo "KPM_LINE=${{ inputs.use_kpm && '-> KPM 支持' || '' }}" >> $GITHUB_ENV
           echo "LZ4_SUFFIX=${{ inputs.use_zram && '、LZ4KD' || '' }}" >> $GITHUB_ENV
 
-          # Hook 类型
           if [ "${{ inputs.kernelsu_variant }}" = "SukiSU" ] || [ "${{ inputs.kernelsu_variant }}" = "ReSukiSU" ]; then
             echo "HOOK_TYPE=-> SUSFS Inline Hooks" >> $GITHUB_ENV
           else
             echo "HOOK_TYPE=-> KPROBE Hooks" >> $GITHUB_ENV
           fi
 
-          # Mount 类型
           if [ "${{ inputs.kernelsu_variant }}" = "Official" ]; then
             echo "MOUNT_TYPE=-> OVERLAYFS 支持" >> $GITHUB_ENV
             echo "KSU_SUFFIX=原版" >> $GITHUB_ENV
@@ -306,18 +308,14 @@ jobs:
             echo "KSU_SUFFIX=" >> $GITHUB_ENV
           fi
 
-          # 分支显示
           if [ "${{ inputs.kernelsu_branch }}" = "Dev(开发)" ]; then
             echo "BRANCH_INFO=($KSU_VER)" >> $GITHUB_ENV
           else
             echo "BRANCH_INFO=稳定版" >> $GITHUB_ENV
           fi
 
-          # 发布标题
           echo "RELEASE_NAME=GKI内核: ${KSU_NAME}(${KSU_VER}) & SUSFS ${SUS_VER}" >> $GITHUB_ENV
 
-      # ==================== 验证构建状态 ====================
-      # 确保所有选中的构建任务都成功完成
       - name: 验证构建状态
         run: |
           failed=0
@@ -335,12 +333,9 @@ jobs:
           check_build "${{ inputs.build_a16_6_12 || inputs.build_all }}" "build-a16-6-12" "${{ needs.build-a16-6-12.result }}"
           [[ "$failed" -ne 0 ]] && exit 1 || true
 
-      # ==================== 检出代码 ====================
       - name: 检出代码
         uses: actions/checkout@v4
 
-      # ==================== 确定 KSU 分支 ====================
-      # 根据用户选择确定实际的 Git 分支
       - name: 确定 KSU 分支
         if: inputs.kernelsu_branch == 'Dev(开发)' || inputs.kernelsu_variant == 'MKSU' || inputs.kernelsu_variant == 'SukiSU' || inputs.kernelsu_variant == 'ReSukiSU'
         run: |
@@ -352,8 +347,6 @@ jobs:
           esac
           echo "KSU_BRANCH=$BRANCH" >> $GITHUB_ENV
 
-      # ==================== 获取 KernelSU 提交信息 ====================
-      # 获取当前使用的 KernelSU 版本的 Git 提交信息
       - name: 获取 KernelSU 提交信息
         run: |
           case "${{ inputs.kernelsu_variant }}" in
@@ -377,8 +370,6 @@ jobs:
           echo "KSU_REF=$KSU_REF" >> $GITHUB_ENV
           echo "KSU_URL=$KSU_URL" >> $GITHUB_ENV
 
-      # ==================== 获取 SUSFS 提交信息 ====================
-      # 获取各版本 SUSFS 的 Git 提交信息
       - name: 获取 SUSFS 提交信息
         run: |
           GITLAB_OWNER="simonpunk"
@@ -400,8 +391,6 @@ jobs:
             fi
           done
 
-      # ==================== 生成发布说明 ====================
-      # 创建包含详细信息的发布说明文档
       - name: 生成发布说明
         run: |
           cat > release_body.md << EOF
@@ -498,11 +487,8 @@ jobs:
           📂 点击下方 **Assets** 展开下载 / Click **Assets** below to download
           EOF
 
-      # ==================== 生成版本标签 ====================
-      # 根据 SUSFS 版本生成递增的发布标签
       - name: 生成版本标签
         run: |
-          # 获取 SUSFS 版本，如果 get-manager 被跳过则使用默认值
           SUS_VERSION="${{ needs.get-manager.outputs.susVer }}"
           if [ -z "$SUS_VERSION" ]; then
             echo "警告: 未获取到 SUSFS 版本，使用默认版本号"
@@ -523,13 +509,11 @@ jobs:
           git tag "$NEW_TAG"
           git push --tags
 
-      # ==================== 下载构建产物 ====================
       - name: 下载构建产物
         uses: actions/download-artifact@v4
         with:
           path: ./downloaded-artifacts
 
-      # ==================== 创建 GitHub Release ====================
       - name: 创建 GitHub Release
         run: |
           PRERELEASE_FLAG=""
@@ -542,7 +526,6 @@ jobs:
             --notes-file release_body.md \
             $PRERELEASE_FLAG
 
-      # ==================== 上传管理器和模块 ====================
       - name: 上传管理器和 SUSFS 模块
         continue-on-error: true
         run: |
@@ -560,18 +543,15 @@ jobs:
             gh release upload "$NEW_TAG" "$f" || true
           done
 
-      # ==================== 上传内核产物 ====================
       - name: 上传内核产物
         run: |
           for file in ./downloaded-artifacts/*_kernel-*/*; do
             [ -d "$file" ] && continue
-            # 跳过 -Rejects 目录中的文件（已在 collect-rejects 中汇总处理）
             [[ "$file" == *-Rejects/* ]] && continue
             echo "上传 $file..."
             gh release upload "$NEW_TAG" "$file"
           done
 
-      # ==================== 构建摘要 ====================
       - name: 构建摘要
         run: |
           echo "## 发布已创建" >> $GITHUB_STEP_SUMMARY
@@ -584,7 +564,35 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
         run: |
-          export TAG=$NEW_TAG
-          export REPO=$KSU_URL
-          curl -Ls https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/raw/main/upload -o upload
-          chmod +x upload && ./upload
+          set -euo pipefail
+
+          INPUT_COMMIT="${{ inputs.commit }}"
+          INPUT_CHANGE_LOG="${{ inputs.change_log }}"
+
+          TEXT=$(cat <<EOF
+          <b>New Release Pushed:</b>
+          
+          Branch: <code>main</code>
+          Commit: ${INPUT_COMMIT}
+          Tag: <code>${NEW_TAG}</code>
+          
+          Features: 
+          <pre>ReSukiSU = ${{ inputs.kernelsu_variant == 'ReSukiSU' && 'true' || 'false' }}
+          SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
+          BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
+          LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
+          Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
+          KPatch-Next Support = ${{ inputs.kernelsu_variant == 'Next' && 'true' || 'false' }}</pre>
+          Change Log: 
+          <pre>${INPUT_CHANGE_LOG}
+          </pre>
+          Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
+
+          Note: The "commit" here is manually provided.
+          EOF
+          )
+
+          curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="${TEXT}"
