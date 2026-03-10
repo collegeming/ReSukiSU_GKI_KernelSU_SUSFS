@@ -713,6 +713,17 @@ jobs:
                 patch -p1 < task_mmu.c.patch || true
               fi
             fi
+
+            # Android 16 - 6.12 修复
+            if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "6.12" ]]; then
+              # 修复 setuid_hook.c 重复定义: 当 CONFIG_KSU_SUSFS 启用时，
+              # 底部 #if (>=6.8 && MANUAL_HOOK) 块会产生第二个 ksu_handle_setresuid 定义
+              SETUID_HOOK="$KERNEL_ROOT/common/drivers/kernelsu/setuid_hook.c"
+              if [ -f "$SETUID_HOOK" ]; then
+                sed -i 's/defined(CONFIG_KSU_MANUAL_HOOK))/!defined(CONFIG_KSU_SUSFS) \&\& defined(CONFIG_KSU_MANUAL_HOOK))/' "$SETUID_HOOK"
+                echo "已修复 setuid_hook.c 重复定义问题"
+              fi
+            fi
           fi
 
       # ==================== Unicode 绕过修复 ====================
@@ -1057,7 +1068,7 @@ jobs:
                 TARGET_PATH="$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist"
               fi
               ;;
-            "android14"|"android15")
+            "android14"|"android15"|"android16")
               TARGET_PATH="$KERNEL_ROOT/bazel-bin/common/kernel_aarch64/"
               ;;
           esac
@@ -1134,7 +1145,7 @@ jobs:
       # ==================== 构建 Boot 镜像 (Android 13+) ====================
       # Android 13 及以上版本不需要 ramdisk
       - name: 构建 Boot 镜像 (Android 13+)
-        if: inputs.android_version == 'android13' || inputs.android_version == 'android14' || inputs.android_version == 'android15'
+        if: inputs.android_version == 'android13' || inputs.android_version == 'android14' || inputs.android_version == 'android15' || inputs.android_version == 'android16'
         working-directory: bootimgs
         run: |
           gzip -n -k -f -9 ./Image > ./Image.gz
