@@ -1,4 +1,9 @@
 name: GetManager
+
+# 适配 Node.js 24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: write  # Allow writing to repository contents (for pushing tags)
   actions: read   # Allows triggering actions

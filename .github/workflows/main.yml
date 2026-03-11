@@ -10,6 +10,10 @@
 
 name: 构建内核
 
+# 适配 Node.js 24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # 并发控制：同一分支只运行一个实例，新运行会取消旧的
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -1,5 +1,9 @@
 name: 内核构建 - Android 14 (6.1)
 
+# 适配 Node.js 24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: write
   actions: write

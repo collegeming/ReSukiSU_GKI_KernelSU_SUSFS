@@ -1,5 +1,9 @@
 name: Update Data & Deploy Pages
 
+# 适配 Node.js 24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   schedule:
     - cron: '0 8 * * 1'  # 每周一 UTC 8:00
