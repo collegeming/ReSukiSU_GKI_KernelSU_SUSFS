@@ -10,10 +10,6 @@ permissions:
 
 on:
   workflow_call: # This allows this workflow to be called from another workflow
-    inputs:
-      kernelsu_variant:
-        required: true
-        type: string
     outputs:
       susVer:
         description: "The fetched SUSFS version number"
