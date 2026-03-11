@@ -35,14 +35,8 @@ on:
       # ==================== KernelSU 配置 ====================
       kernelsu_variant:
         description: "KernelSU 变体"
-        type: choice
-        options:
-          - SukiSU
-          - ReSukiSU
-          - Official
-          - Next
-          - MKSU
-        default: ReSukiSU
+        type: string
+        default: "ReSukiSU"
       kernelsu_branch:
         description: "KSU 分支"
         type: choice
