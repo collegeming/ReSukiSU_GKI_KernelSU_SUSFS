@@ -124,5 +124,3 @@ jobs:
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml
     secrets: inherit
-    with:
-      kernelsu_variant: "ReSukiSU"

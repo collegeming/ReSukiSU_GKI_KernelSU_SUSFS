@@ -177,5 +177,3 @@ jobs:
     if: ${{ !inputs.called_from_main }}
     uses: ./.github/workflows/get-manager.yml
     secrets: inherit
-    with:
-      kernelsu_variant: "ReSukiSU"
