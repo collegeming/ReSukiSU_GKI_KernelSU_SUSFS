@@ -11,17 +11,7 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      kernelsu_variant:
-        description: "KernelSU 变体"
-        required: true
-        type: choice
-        options:
-          - Official
-          - Next
-          - MKSU
-          - SukiSU
-          - ReSukiSU
-        default: ReSukiSU
+      # KernelSU 变体固定为 ReSukiSU
       kernelsu_branch:
         description: "KSU 分支"
         required: true
@@ -62,9 +52,7 @@ on:
         default: false
   workflow_call:
     inputs:
-      kernelsu_variant:
-        required: true
-        type: string
+      # KernelSU 变体固定为 ReSukiSU
       kernelsu_branch:
         required: true
         type: string
@@ -151,7 +139,7 @@ jobs:
       kernel_version: "6.1"
       sub_level: ${{ matrix.sub_level }}
       os_patch_level: ${{ matrix.os_patch_level }}
-      ksu_variant: ${{ inputs.kernelsu_variant }}
+      ksu_variant: "ReSukiSU"
       ksu_branch: ${{ inputs.kernelsu_branch }}
       version: ${{ inputs.version || '' }}
       build_time: ${{ inputs.build_time || '' }}
@@ -167,4 +155,4 @@ jobs:
     uses: ./.github/workflows/get-manager.yml
     secrets: inherit
     with:
-      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_variant: "ReSukiSU"
