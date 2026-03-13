@@ -334,7 +334,7 @@ jobs:
           [[ "$failed" -ne 0 ]] && exit 1 || true
 
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 确定 KSU 分支
         if: inputs.kernelsu_branch == 'Dev(开发)' || inputs.kernelsu_variant == 'MKSU' || inputs.kernelsu_variant == 'SukiSU' || inputs.kernelsu_variant == 'ReSukiSU'
