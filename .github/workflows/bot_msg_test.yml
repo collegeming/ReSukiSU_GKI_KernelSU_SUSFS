@@ -1,4 +1,4 @@
-name: 发送 Telegram 通知
+name: 发送 Telegram 通知 (测试)
 
 on:
   workflow_dispatch:
