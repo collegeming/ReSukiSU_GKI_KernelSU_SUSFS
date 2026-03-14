@@ -401,37 +401,25 @@ jobs:
           echo "obj-y += hmbird_patch.o" >> Makefile
 
       # ==================== 确定 KernelSU 分支 ====================
-      # 根据用户选择的变体和分支，确定实际使用的 Git 分支
+      # 根据用户输入的分支名/commit hash，或使用默认值
       - name: 确定 KernelSU 分支
         id: ksu-branch
         run: |
           branch_input="${{ inputs.ksu_branch }}"
           variant_input="${{ inputs.ksu_variant }}"
 
-          if [ "$variant_input" = "ReSukiSU" ]; then
-            BRANCH="-s main"
+          # 如果用户输入了自定义分支名或 commit hash，直接使用
+          if [ -n "$branch_input" ]; then
+            BRANCH="-s $branch_input"
+            echo "使用自定义分支/提交: $branch_input"
           else
-            case "$branch_input" in
-              "Stable(标准)")
-                case "$variant_input" in
-                  "Next") ;; # Next 使用硬编码分支，不需要 BRANCH
-                  "SukiSU") BRANCH="-s builtin" ;;
-                  "Official"|"MKSU") BRANCH="-s main" ;;
-                  *) BRANCH="-" ;;
-                esac
-                ;;
-              "Dev(开发)")
-                case "$variant_input" in
-                  "Official"|"MKSU") BRANCH="-s main" ;;
-                  "Next") ;; # Next 使用硬编码分支，不需要 BRANCH
-                  "SukiSU") BRANCH="-s builtin" ;;
-                  *) echo "未知变体: $variant_input" >&2; exit 1 ;;
-                esac
-                ;;
-              *)
-                echo "未知分支: $branch_input" >&2
-                exit 1
-                ;;
+            # 留空则使用默认值
+            case "$variant_input" in
+              "ReSukiSU") BRANCH="-s main" ;;
+              "Next") BRANCH="" ;; # Next 使用硬编码分支，不需要 BRANCH
+              "SukiSU") BRANCH="-s builtin" ;;
+              "Official"|"MKSU") BRANCH="-s main" ;;
+              *) BRANCH="-" ;;
             esac
 
             # SukiSU 不启用 SUSFS 时强制使用 main 分支
@@ -440,15 +428,17 @@ jobs:
             fi
           fi
 
-          # 检查是否启用自定义提交 (仅对 SukiSU 生效)
-          CONFIG_FILE="config/config"
-          if [ -f "$CONFIG_FILE" ]; then
-            CUSTOM_ENABLED=$(grep "^custom=" "$CONFIG_FILE" | cut -d'=' -f2)
-            if [ "$CUSTOM_ENABLED" == "true" ] && [ "$variant_input" == "SukiSU" ]; then
-              SUKISU_COMMIT=$(grep "^sukisu=" "$CONFIG_FILE" | cut -d'=' -f2)
-              if [ -n "$SUKISU_COMMIT" ]; then
-                BRANCH="-s $SUKISU_COMMIT"
-                echo "SukiSU 使用自定义提交: $SUKISU_COMMIT"
+          # 检查是否启用自定义提交 (仅对 SukiSU 生效，且未手动指定分支时)
+          if [ -z "$branch_input" ]; then
+            CONFIG_FILE="config/config"
+            if [ -f "$CONFIG_FILE" ]; then
+              CUSTOM_ENABLED=$(grep "^custom=" "$CONFIG_FILE" | cut -d'=' -f2)
+              if [ "$CUSTOM_ENABLED" == "true" ] && [ "$variant_input" == "SukiSU" ]; then
+                SUKISU_COMMIT=$(grep "^sukisu=" "$CONFIG_FILE" | cut -d'=' -f2)
+                if [ -n "$SUKISU_COMMIT" ]; then
+                  BRANCH="-s $SUKISU_COMMIT"
+                  echo "SukiSU 使用配置文件中的自定义提交: $SUKISU_COMMIT"
+                fi
               fi
             fi
           fi

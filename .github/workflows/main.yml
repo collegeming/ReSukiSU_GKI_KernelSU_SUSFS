@@ -44,12 +44,10 @@ on:
           - MKSU
         default: ReSukiSU
       kernelsu_branch:
-        description: "KSU 分支"
-        type: choice
-        options:
-          - Stable(标准)
-          - Dev(开发)
-        default: Stable(标准)
+        description: "KSU 分支 (main/builtin/自定义commit hash，留空使用默认)"
+        type: string
+        default: ""
+        required: false
 
       # ==================== 可选配置 ====================
       version:
@@ -308,8 +306,8 @@ jobs:
             echo "KSU_SUFFIX=" >> $GITHUB_ENV
           fi
 
-          if [ "${{ inputs.kernelsu_branch }}" = "Dev(开发)" ]; then
-            echo "BRANCH_INFO=($KSU_VER)" >> $GITHUB_ENV
+          if [ -n "${{ inputs.kernelsu_branch }}" ]; then
+            echo "BRANCH_INFO=(${{ inputs.kernelsu_branch }})" >> $GITHUB_ENV
           else
             echo "BRANCH_INFO=稳定版" >> $GITHUB_ENV
           fi
@@ -337,14 +335,19 @@ jobs:
         uses: actions/checkout@v6
 
       - name: 确定 KSU 分支
-        if: inputs.kernelsu_branch == 'Dev(开发)' || inputs.kernelsu_variant == 'MKSU' || inputs.kernelsu_variant == 'SukiSU' || inputs.kernelsu_variant == 'ReSukiSU'
+        if: inputs.kernelsu_branch != '' || inputs.kernelsu_variant == 'MKSU' || inputs.kernelsu_variant == 'SukiSU' || inputs.kernelsu_variant == 'ReSukiSU'
         run: |
-          case "${{ inputs.kernelsu_variant }}" in
-            "Official"|"MKSU") BRANCH="main" ;;
-            "SukiSU"|"ReSukiSU") BRANCH="main" ;;
-            "Next") BRANCH="dev" ;;
-            *) echo "错误: 未知变体" >&2; exit 1 ;;
-          esac
+          # 如果用户输入了自定义分支/commit，使用用户输入的
+          if [ -n "${{ inputs.kernelsu_branch }}" ]; then
+            BRANCH="${{ inputs.kernelsu_branch }}"
+          else
+            case "${{ inputs.kernelsu_variant }}" in
+              "Official"|"MKSU") BRANCH="main" ;;
+              "SukiSU"|"ReSukiSU") BRANCH="main" ;;
+              "Next") BRANCH="dev" ;;
+              *) echo "错误: 未知变体" >&2; exit 1 ;;
+            esac
+          fi
           echo "KSU_BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: 获取 KernelSU 提交信息
@@ -357,11 +360,26 @@ jobs:
             "ReSukiSU") REPO_URL="https://github.com/ReSukiSU/ReSukiSU.git"; REPO_URL2="ReSukiSU/ReSukiSU" ;;
           esac
 
-          if [[ "${{ inputs.kernelsu_branch }}" == "Stable(标准)" && "${{ inputs.kernelsu_variant }}" != "MKSU" ]]; then
+          # 如果用户输入了自定义分支/commit，优先使用
+          if [ -n "${{ inputs.kernelsu_branch }}" ]; then
+            BRANCH_INPUT="${{ inputs.kernelsu_branch }}"
+            # 检查是否是 commit hash (40位十六进制)
+            if [[ "$BRANCH_INPUT" =~ ^[a-fA-F0-9]{40}$ ]]; then
+              KSU_REF=$BRANCH_INPUT
+              KSU_URL="https://github.com/$REPO_URL2/commit/$BRANCH_INPUT"
+            else
+              # 是分支名，获取该分支的最新 commit
+              COMMIT_HASH=$(git ls-remote $REPO_URL refs/heads/$BRANCH_INPUT | awk '{ print $1 }')
+              KSU_REF=$COMMIT_HASH
+              KSU_URL="https://github.com/$REPO_URL2/commit/$COMMIT_HASH"
+            fi
+          elif [[ "${{ inputs.kernelsu_variant }}" != "MKSU" ]]; then
+            # 稳定版：获取最新 tag
             TAG=$(git ls-remote --tags --sort=-v:refname $REPO_URL | grep -o 'refs/tags/.*' | cut -d'/' -f3 | head -n1)
             KSU_REF=$TAG
             KSU_URL="https://github.com/$REPO_URL2/releases/tag/$TAG"
           else
+            # MKSU 或其他情况：获取分支最新 commit
             COMMIT_HASH=$(git ls-remote $REPO_URL refs/heads/${KSU_BRANCH:-main} | awk '{ print $1 }')
             KSU_REF=$COMMIT_HASH
             KSU_URL="https://github.com/$REPO_URL2/commit/$COMMIT_HASH"
