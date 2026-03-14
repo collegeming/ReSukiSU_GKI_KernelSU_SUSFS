@@ -128,7 +128,7 @@ jobs:
 
       # ==================== 检出仓库代码 ====================
       - name: 检出代码仓库
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ==================== 初始化构建环境 ====================
       # 设置各种路径变量，包括内核源码、补丁、工具等目录
@@ -394,23 +394,20 @@ jobs:
           echo "obj-y += hmbird_patch.o" >> Makefile
 
       # ==================== 确定 KernelSU 分支 ====================
-      # ReSukiSU 固定使用 main 分支
+      # ReSukiSU 支持自定义分支或 commit hash
       - name: 确定 KernelSU 分支
         id: ksu-branch
         run: |
           branch_input="${{ inputs.ksu_branch }}"
 
-          case "$branch_input" in
-            "Stable(标准)")
-              BRANCH="-s main"
-              ;;
-            "Dev(开发)")
-              BRANCH="-s main"
-              ;;
-            *)
-              BRANCH="-s main"
-              ;;
-          esac
+          # 如果用户输入了自定义分支名或 commit hash，直接使用
+          if [ -n "$branch_input" ]; then
+            BRANCH="-s $branch_input"
+            echo "使用自定义分支/提交: $branch_input"
+          else
+            # ReSukiSU 默认使用 main 分支
+            BRANCH="-s main"
+          fi
 
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           echo "KSU 分支: $BRANCH"

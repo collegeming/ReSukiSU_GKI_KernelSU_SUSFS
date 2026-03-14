@@ -53,14 +53,10 @@ on:
       # ==================== KernelSU 配置 ====================
       # KernelSU 变体固定为 ReSukiSU
       kernelsu_branch:
-        description: "KSU 分支"
-        required: true
-        type: choice
-        options:
-          - Stable(标准)
-          - Dev(开发)
-          - Other(其他/指定)
-        default: Stable(标准)
+        description: "KSU 分支 (main/builtin/自定义commit hash，留空使用默认)"
+        required: false
+        type: string
+        default: ""
 
       # ==================== 可选配置 ====================
       version:
