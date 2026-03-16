@@ -652,7 +652,7 @@ jobs:
           )
 
           curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            -d chat_id="${CHAT_ID}" \
+            -d chat_id="${CHAT_ID_2}" \
             -d message_thread_id="${message_thread_id}" \
             -d parse_mode="HTML" \
             --data-urlencode text="${TEXT}"
