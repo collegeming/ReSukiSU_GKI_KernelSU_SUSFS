@@ -577,7 +577,7 @@ jobs:
           echo "- **类型**: ${{ inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **链接**: https://github.com/$REPO_OWNER/$REPO_NAME/releases/tag/$NEW_TAG" >> $GITHUB_STEP_SUMMARY
 
-      - name: 发送到频道
+      - name: 发送 Telegram 通知
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
