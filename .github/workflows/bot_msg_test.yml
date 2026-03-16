@@ -17,40 +17,36 @@ permissions:
 
 jobs:
   notify:
-    name: 发送 Telegram 通知
-    runs-on: ubuntu-latest
-    env:
-      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-      CHAT_ID: ${{ secrets.CHAT_ID_2 }}
-      message_thread_id: ${secrets.message_thread_id}
-    steps:
-      - name: Send Telegram message
-        shell: bash
+    name: 发送 Telegram 群组通知
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          message_thread_id: ${{secrets.message_thread_id}}
         run: |
           set -euo pipefail
 
-          NEW_TAG="${GITHUB_REF_NAME}"
-          INPUT_COMMIT="${{ github.event.inputs.commit }}"
-          INPUT_CHANGE_LOG="${{ github.event.inputs.change_log }}"
+          INPUT_COMMIT="${{ inputs.commit }}"
+          INPUT_CHANGE_LOG="${{ inputs.change_log }}"
 
           TEXT=$(cat <<EOF
-          <b>New Release Pushed:</b>
+          <b>New GKI Release:</b>
           
           Branch: <code>main</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
           
           Features: 
-          <pre>ReSukiSU = true
-          SuSFS = true
-          BBG = false
-          LZ4KD = false
-          Built-in KPM = false
-          KPatch-Next Support =true</pre>
+          <pre>ReSukiSU = ${{ inputs.kernelsu_variant == 'ReSukiSU' && 'true' || 'false' }}
+          SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
+          BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
+          LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
+          Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
+          KPatch-Next Support = true</pre>
           Change Log: 
           <pre>${INPUT_CHANGE_LOG}
           </pre>
-          Download: <a href="https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases/tag/${NEW_TAG}">Click Here</a>
+          
+          Download: <a href="https://t.me/UnofficialReSukiSUGKI">View In Channel</a>
 
           Note: The "commit" here refers to ReSukiSU's commit, not this repository's.
           EOF
