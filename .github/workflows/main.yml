@@ -619,7 +619,7 @@ jobs:
       - name: 发送 Telegram 群组通知
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
+          CHAT_ID: ${{ secrets.CHAT_ID_2 }}
           message_thread_id: ${{secrets.message_thread_id}}
         run: |
           set -euo pipefail
@@ -652,7 +652,7 @@ jobs:
           )
 
           curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            -d chat_id="${CHAT_ID_2}" \
+            -d chat_id="${CHAT_ID}" \
             -d message_thread_id="${message_thread_id}" \
             -d parse_mode="HTML" \
             --data-urlencode text="${TEXT}"
