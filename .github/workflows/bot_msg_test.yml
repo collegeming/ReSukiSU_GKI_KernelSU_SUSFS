@@ -21,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-      CHAT_ID: ${{ secrets.CHAT_ID }}
+      CHAT_ID: ${{ secrets.CHAT_ID_2 }}
+      message_thread_id: ${secrets.message_thread_id}
     steps:
       - name: Send Telegram message
         shell: bash
@@ -57,5 +58,6 @@ jobs:
 
           curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             -d chat_id="${CHAT_ID}" \
+            -d message_thread_id="${message_thread_id}" \
             -d parse_mode="HTML" \
             --data-urlencode text="${TEXT}"
