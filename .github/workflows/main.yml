@@ -620,7 +620,7 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID_2 }}
-          message_thread_id: ${{secrets.message_thread_id}}
+          message_thread_id: ${{secrets.MESSAGE_THREAD_ID}}
         run: |
           set -euo pipefail
 
@@ -661,7 +661,7 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID_3 }}
-          message_thread_id: ${{secrets.message_thread_id_2}}
+          message_thread_id: ${{secrets.MESSAGE_THREAD_ID_2}}
         run: |
           set -euo pipefail
 
