@@ -14,7 +14,7 @@
 
 </div>
 
-## ⚠️ 仓库须知 ⚠️
+## ⚠️ 仓库须知
 
 ① 本仓库分叉自 [zzh20188/GKI_KernelSU_SUSFS](https://github.com/zzh20188/GKI_KernelSU_SUSFS/) 本人只进行了部分修改与问题修复，请各位使用者优先考虑分叉原始仓库。
 
