@@ -1,9 +1,4 @@
 name: 发送 Telegram 机器人通知
-# 并发控制：同一分支只运行一个实例，新运行会取消旧的
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-# 权限最小化配置
 permissions:
   contents: read
   actions: read
