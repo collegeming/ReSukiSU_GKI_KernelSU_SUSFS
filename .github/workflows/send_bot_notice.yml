@@ -43,7 +43,7 @@ jobs:
           fi
           
           # 构造 HTML 格式消息内容，适配Telegram转义
-          TEXT="<b>New Notifications</b>%0A%0A"
+          TEXT="<b>New Notifications: </b>%0A%0A"
           TEXT+="<b>Notification type：</b><code>${INPUT_MSG_TYPE}</code>%0A%0A"
           TEXT+="<b>Notification content：</b>%0A<pre>${INPUT_CONTENT}</pre>"
           
