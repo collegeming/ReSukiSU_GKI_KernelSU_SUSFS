@@ -12,9 +12,9 @@ on:
     inputs:
       # ==================== Bot-Push 选项 ====================
       msg_type:
-        description: "通知类型（如：告警、提醒、通知）"
+        description: "通知类型"
         type: string  # 原boolean不合理，改为字符串支持自定义类型
-        default: "通知"
+        default: "notice"
         required: true
       content:
         description: "通知内容"
@@ -43,9 +43,9 @@ jobs:
           fi
           
           # 构造 HTML 格式消息内容，适配Telegram转义
-          TEXT="<b>📢 新通知</b>%0A%0A"
-          TEXT+="<b>通知类型：</b><code>${INPUT_MSG_TYPE}</code>%0A%0A"
-          TEXT+="<b>内容：</b>%0A<pre>${INPUT_CONTENT}</pre>"
+          TEXT="<b>New Notifications</b>%0A%0A"
+          TEXT+="<b>Notification type：</b><code>${INPUT_MSG_TYPE}</code>%0A%0A"
+          TEXT+="<b>Notification content：</b>%0A<pre>${INPUT_CONTENT}</pre>"
           
           # 发送Telegram请求并捕获响应
           echo "开始发送Telegram通知..."
