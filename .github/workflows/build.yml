@@ -667,7 +667,7 @@ jobs:
 
             # Android 14 - 6.1 修复
             if [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "6.1" ]]; then
-              if [[ "$CURRENT_SUB" -le 138 || "$CURRENT_SUB" -ge 145 ]]; then
+              if [[ "$CURRENT_SUB" -le 141 || "$CURRENT_SUB" -ge 145 ]]; then
                 cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a14-6.1/base.c.patch ./
                 patch -p1 < base.c.patch || true
               fi
@@ -697,6 +697,14 @@ jobs:
                 sed -i '/#include <linux\/dma-buf.h>/a #endif' ./fs/proc/base.c
                 sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs_def.h>' ./fs/proc/base.c
                 sed -i '/#include <linux\/dma-buf.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP' ./fs/proc/base.c
+              fi
+              # 修复 ReSukiSU: SUSFS 补丁使用 SUSFS_IS_INODE_SUS_MAP / SUSFS_IS_INODE_OPEN_REDIRECT
+              # 但缺少 #include <linux/susfs.h>，导致编译报 undeclared identifier
+              if grep -q 'SUSFS_IS_INODE_SUS_MAP\|SUSFS_IS_INODE_OPEN_REDIRECT' ./fs/proc/base.c && ! grep -qF '#include <linux/susfs.h>' ./fs/proc/base.c; then
+                if ! grep -qF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
+                  sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
+                fi
+                sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs.h>' ./fs/proc/base.c
               fi
               if [[ "$CURRENT_SUB" -le 58 ]]; then
                 cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/task_mmu.c.patch ./
