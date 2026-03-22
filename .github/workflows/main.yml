@@ -529,7 +529,7 @@ jobs:
           echo "- **类型**: ${{ inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **链接**: https://github.com/$REPO_OWNER/$REPO_NAME/releases/tag/$NEW_TAG" >> $GITHUB_STEP_SUMMARY
 
-      - name: 发送到频道
+      - name: 发送 Telegram 频道通知
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
@@ -540,7 +540,7 @@ jobs:
           INPUT_CHANGE_LOG="${{ inputs.change_log }}"
 
           TEXT=$(cat <<EOF
-          <b>New Release Pushed:</b>
+          <b>New GKI Release:</b>
           
           Branch: <code>main</code>
           Commit: ${INPUT_COMMIT}
@@ -565,5 +565,87 @@ jobs:
 
           curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             -d chat_id="${CHAT_ID}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="${TEXT}"
+            
+      - name: 发送 Telegram 群组通知(ReSukiSU群组)
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID_2 }}
+          message_thread_id: ${{secrets.MESSAGE_THREAD_ID}}
+        run: |
+          set -euo pipefail
+
+          INPUT_COMMIT="${{ inputs.commit }}"
+          INPUT_CHANGE_LOG="${{ inputs.change_log }}"
+
+          TEXT=$(cat <<EOF
+          <b>New GKI Release:</b>
+          
+          Branch: <code>main</code>
+          Commit: ${INPUT_COMMIT}
+          Tag: <code>${NEW_TAG}</code>
+          
+          Features: 
+          <pre>ReSukiSU = ${{ inputs.kernelsu_variant == 'ReSukiSU' && 'true' || 'false' }}
+          SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
+          BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
+          LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
+          Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
+          KPatch-Next Support = true</pre>
+          Change Log: 
+          <pre>${INPUT_CHANGE_LOG}
+          </pre>
+          
+          Download: <a href="https://t.me/UnofficialReSukiSUGKI">View In Channel</a>
+
+          Note: The "commit" here refers to ReSukiSU's commit, not this repository's.
+          EOF
+          )
+
+          curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d message_thread_id="${message_thread_id}" \
+            -d parse_mode="HTML" \
+            --data-urlencode text="${TEXT}"
+
+      - name: 发送 Telegram 群组通知(频道讨论组)
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID_3 }}
+          message_thread_id: ${{secrets.MESSAGE_THREAD_ID_2}}
+        run: |
+          set -euo pipefail
+
+          INPUT_COMMIT="${{ inputs.commit }}"
+          INPUT_CHANGE_LOG="${{ inputs.change_log }}"
+
+          TEXT=$(cat <<EOF
+          <b>New GKI Release:</b>
+          
+          Branch: <code>main</code>
+          Commit: ${INPUT_COMMIT}
+          Tag: <code>${NEW_TAG}</code>
+          
+          Features: 
+          <pre>ReSukiSU = ${{ inputs.kernelsu_variant == 'ReSukiSU' && 'true' || 'false' }}
+          SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
+          BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
+          LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
+          Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
+          KPatch-Next Support = true</pre>
+          Change Log: 
+          <pre>${INPUT_CHANGE_LOG}
+          </pre>
+          
+          Download: <a href="https://t.me/UnofficialReSukiSUGKI">View In Channel</a>
+
+          Note: The "commit" here refers to ReSukiSU's commit, not this repository's.
+          EOF
+          )
+
+          curl -s "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
+            -d message_thread_id="${message_thread_id}" \
             -d parse_mode="HTML" \
             --data-urlencode text="${TEXT}"

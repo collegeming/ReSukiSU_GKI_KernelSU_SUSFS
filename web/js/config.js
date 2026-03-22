@@ -18,7 +18,7 @@ export var RUNTIME_CACHE_KEY = Date.now().toString(36);
 export var SUSFS_COMPAT_MIN = {
   '5.10': 218,
   '5.15': 144,
-  '6.1': 141,
-  '6.6': 92,
+  '6.1': 25,
+  '6.6': 50,
   '6.12': 0,
 };
