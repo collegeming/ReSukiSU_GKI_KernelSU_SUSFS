@@ -542,7 +542,7 @@ jobs:
           TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
           
-          Branch: <code>main</code>
+          Branch: <code>${{ github.ref_name }}</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
           
@@ -582,7 +582,7 @@ jobs:
           TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
           
-          Branch: <code>main</code>
+          Branch: <code>${{ github.ref_name }}</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
           
@@ -623,7 +623,7 @@ jobs:
           TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
           
-          Branch: <code>main</code>
+          Branch: <code>${{ github.ref_name }}</code>
           Commit: ${INPUT_COMMIT}
           Tag: <code>${NEW_TAG}</code>
           
