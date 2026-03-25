@@ -30,6 +30,12 @@
 
 [TanakaLun](https://github.com/TanakaLun)：协助进行了大量修复和修改。
 
+[YC酱luyancib](https://github.com/luyanci): 协助开发Telegram Bot，提供部分构建工作流程修复思路和Bot开发思路。
+
+[AlexLiuDev233](https://github.com/AlexLiuDev233): 协助修复构建工作流程存在的问题。
+
+[cctv18](https://github.com/cctv18): 协助修复构建工作流程的存在问题，为添加6.12内核构建支持提供部分思路，为修复一些SUSFS导致的问题提供思路。
+
 ## 🚀 快速导航
 
 <table>
