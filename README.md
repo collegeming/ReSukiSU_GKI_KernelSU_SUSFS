@@ -34,7 +34,7 @@
 
 [AlexLiuDev233](https://github.com/AlexLiuDev233): 协助修复构建工作流程存在的问题。
 
-[cctv18](https://github.com/cctv18): 协助修复构建工作流程的存在问题，为添加6.12内核构建支持提供部分思路，为修复一些SUSFS导致的问题提供思路。
+[cctv18](https://github.com/cctv18): 协助修复构建工作流程存在的问题，为添加6.12内核构建支持提供部分思路，为修复一些SUSFS导致的问题提供思路。
 
 ## 🚀 快速导航
 
