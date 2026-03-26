@@ -26,7 +26,7 @@
 
 [zzh20188](https://github.com/zzh20188)：他是本仓库的上游仓库作者。
 
-[zhuzhuzihan](https://github.com/zhuzhuzihan)：协助进行了大量修复和修改，同时为我们的Telegram Bot提供服务器(仓库所有者真的太穷了，租不起)。
+[zhuzhuzihan](https://github.com/zhuzhuzihan)：协助进行了大量修复和修改，同时为我们的Telegram Bot提供服务器(仓库所有者真的太穷了，租不起)，我们的Telegram Bot的主要开发者。
 
 [TanakaLun](https://github.com/TanakaLun)：协助进行了大量修复和修改。
 
