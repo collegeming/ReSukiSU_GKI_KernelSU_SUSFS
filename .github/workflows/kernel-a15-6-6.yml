@@ -30,17 +30,17 @@ on:
         description: "启用 ZRAM 增强算法"
         required: true
         type: boolean
-        default: true
+        default: false
       use_bbg:
         description: "启用 BBG 防格机"
         required: true
         type: boolean
-        default: true
+        default: false
       use_kpm:
         description: "启用 KPM 功能"
         required: true
         type: boolean
-        default: true
+        default: false
       cancel_susfs:
         description: "禁用 SUSFS"
         required: true
