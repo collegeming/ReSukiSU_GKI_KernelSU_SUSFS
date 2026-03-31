@@ -240,7 +240,7 @@ jobs:
           SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
 
           echo "克隆 AnyKernel3..."
-          git clone https://github.com/WildKernels/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
+          git clone https://github.com/coolzyd9107/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
           rm -rf AnyKernel3/.git
 
           echo "克隆 SUSFS (分支: $SUSFS_BRANCH)..."
