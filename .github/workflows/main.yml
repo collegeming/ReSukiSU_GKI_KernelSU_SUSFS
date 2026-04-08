@@ -69,6 +69,10 @@ on:
         description: "启用 KPM 功能"
         type: boolean
         default: false
+      use_rekernel:
+        description: "启用 Re-Kernel 驱动"
+        type: boolean
+        default: false
       cancel_susfs:
         description: "禁用 SUSFS"
         type: boolean
@@ -131,6 +135,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       called_from_main: true
 
@@ -146,6 +151,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       called_from_main: true
 
@@ -161,6 +167,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       called_from_main: true
 
@@ -176,6 +183,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       called_from_main: true
 
@@ -191,6 +199,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
       use_kpm: ${{ inputs.use_kpm }}
+      use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       called_from_main: true
 
@@ -227,7 +236,7 @@ jobs:
           fi
 
       - name: 上传汇总冲突文件
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AIO-REJ
           path: AIO-REJ.zip

@@ -58,10 +58,9 @@ jobs:
           echo "======================================================="
           
       - name: 安装依赖
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: git curl jq
-          execute_install_scripts: true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git curl jq
 
       - name: 获取 KSU & SUSFS 版本
         id: get_version
@@ -192,7 +191,7 @@ jobs:
 
       - name: 上传APK
         if: steps.add_KSU.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ReSukiSU-Manager(${{ env.KSU_VERSION }})
           path: |
@@ -200,7 +199,7 @@ jobs:
 
       - name: 上传SUSFS模块
         if: steps.add_SUSFS.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: susfs-${{ env.SUSFS_NAME }}
           path: ./susfs-module/*

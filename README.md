@@ -42,7 +42,7 @@
 <tr>
 <td align="center" width="33%">📖 <b><a href="https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki">文档</a></b></td>
 <td align="center" width="34%">📥 <b><a href="https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases">下载</a></b></td>
-<td align="center" width="33%">🔰 <b><a href="https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki/Fork%E4%B8%8E%E8%87%AA%E5%AE%9A%E4%B9%89%E7%BC%96%E8%AF%91%E6%8C%87%E5%8D%97">新手自定义构建必看</a></b></td>
+<td align="center" width="33%">🔰 <b><a href="https://zzh20188.github.io/GKI_KernelSU_SUSFS/guide.html">新手教程</a></b></td>
 </tr>
 </table>
 
@@ -59,6 +59,8 @@
 > **Android 16：已支持 Android 16 - 6.12 内核版本**
 >
 > **自本仓库的提交#c17aae5起我们已彻底移除对除ReSukiSU以外的KernelSU变体的内核构建支持，如果你出于某种原因更喜欢使用其他KernelSU变体的管理器，你完全不必担心，我们启用了muti-manager (内核中的KernelSU驱动程序仍是ReSukiSU，但支持使用其它大部分KernelSU变体的管理器进行管理，例如KowSU和SukiSU-Ultra的管理器) ，这样你就可以直接使用其他KernelSU变体的管理器，但请务必记住，如果你要反馈问题，请使用ReSukiSU管理器提交日志信息**
+
+> **rekernel功能（测试）：已支持 rekernel 功能（目前处于测试阶段）**
 
 ---
 
