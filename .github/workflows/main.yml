@@ -216,7 +216,7 @@ jobs:
       - build-a16-6-12
     steps:
       - name: 下载冲突文件
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./downloaded-artifacts
           pattern: '*-Rejects'
@@ -489,7 +489,7 @@ jobs:
           git push --tags
 
       - name: 下载构建产物
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./downloaded-artifacts
 

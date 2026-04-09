@@ -445,7 +445,7 @@ jobs:
             SUSFS_VERSION="2.0.0"
           fi
           if [ ! -d "$KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}" ]; then
-            echo "::warning::未找到 wild/susfs_fix_patches/v${SUSFS_VERSION}，回退 v2.0.0"
+            echo "未找到 wild/susfs_fix_patches/v${SUSFS_VERSION}，回退 v2.0.0"
             SUSFS_VERSION="2.0.0"
           fi
           echo "SUSFS 修复补丁版本: v${SUSFS_VERSION}"
@@ -1003,7 +1003,7 @@ jobs:
       # ==================== 编译内核 ====================
       # 使用重试机制编译内核，超时后自动重试
       - name: 构建——如出错为该KSU暂时未同步SUSFS代码或编译时错误(等待该KSU仓库修复)
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 30
           max_attempts: 3
