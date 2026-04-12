@@ -455,191 +455,142 @@ jobs:
           cp $SUSFS4KSU/kernel_patches/fs/* ./common/fs/
           cp $SUSFS4KSU/kernel_patches/include/linux/* ./common/include/linux/
 
-          case "${{ inputs.ksu_variant }}" in
-            "Official"|"MKSU")
-              cd ./KernelSU
-              cp $SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
-              # 兼容旧版补丁：仅当补丁仍只修改 kernel/Makefile 时，才替换为 kernel/Kbuild
-              if grep -q '^diff --git a/kernel/Makefile b/kernel/Makefile' ./10_enable_susfs_for_ksu.patch \
-                && ! grep -q '^diff --git a/kernel/Kbuild b/kernel/Kbuild' ./10_enable_susfs_for_ksu.patch; then
-                sed -i 's|kernel/Makefile|kernel/Kbuild|g' ./10_enable_susfs_for_ksu.patch
-              fi
-              patch -p1 --forward < 10_enable_susfs_for_ksu.patch || true
-
-              # 仅 MKSU: 修复 SUSFS 补丁与最新 KernelSU 代码重构不兼容导致的 include 路径问题
-              # MKSU 的 setup.sh clone 的是 tiann/KernelSU（新版子目录结构），
-              # 但补丁中的 .c/.h 修改 hunks 因上下文已变化而静默失败，需要手动修复
-              if [ "${{ inputs.ksu_variant }}" == "MKSU" ]; then
-                KBUILD_FILE="kernel/Kbuild"
-                KSU_KERNEL_DIR="kernel"
-
-                # 确保 Kbuild 有正确的 include 搜索路径
-                if [ -f "$KBUILD_FILE" ] && ! grep -qF '-I$(src)/include' "$KBUILD_FILE"; then
-                  sed -i '/ccflags-y += -I$(srctree)\/security\/selinux/a ccflags-y += -I$(src) -I$(src)/include' "$KBUILD_FILE"
-                  echo "已添加 -I\$(src)/include 到 Kbuild"
-                fi
-
-                # 修复 feature/ 和 core/ 下源文件中未被补丁更新的 include 路径
-                find "$KSU_KERNEL_DIR" \( -name '*.c' -o -name '*.h' \) | while read -r f; do
-                  if echo "$f" | grep -qv '/include/'; then
-                    if grep -q '#include "klog.h"' "$f"; then
-                      sed -i 's|#include "klog.h"|#include "include/klog.h"|g' "$f"
-                      echo "修复 include 路径: $f (klog.h)"
-                    fi
-                    if grep -q '#include "ksu.h"' "$f"; then
-                      sed -i 's|#include "ksu.h"|#include "include/ksu.h"|g' "$f"
-                      echo "修复 include 路径: $f (ksu.h)"
-                    fi
-                    if grep -q '#include "arch.h"' "$f"; then
-                      sed -i 's|#include "arch.h"|#include "include/arch.h"|g' "$f"
-                      echo "修复 include 路径: $f (arch.h)"
-                    fi
-                  fi
-                done
-              fi
-
-              cd ..
-              ;;
-            "Next"|"SukiSU"|"ReSukiSU")
-              echo "Next/SukiSU/ReSukiSU 使用内置 SUSFS 支持"
-              ;;
-          esac
+          # ReSukiSU 使用内置 SUSFS 支持
+          echo "ReSukiSU 使用内置 SUSFS 支持"
 
           # 应用主 SUSFS 补丁到内核
           cd $KERNEL_ROOT/common
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
 
           # 应用版本特定修复
-          if [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ]; then
-            CURRENT_SUB="${{ inputs.sub_level }}"
-            if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
-              CURRENT_SUB=99999
-            fi
+          CURRENT_SUB="${{ inputs.sub_level }}"
+          if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
+            CURRENT_SUB=99999
+          fi
 
-            # Android 12 - 5.10 修复
-            if [[ "${{ inputs.android_version }}" == "android12" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
-              if [[ "$CURRENT_SUB" -le 209 ]]; then
-                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-              fi
-              if [[ "$CURRENT_SUB" -le 117 ]]; then
-                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/fdinfo.c.patch ./
-                patch -p1 < fdinfo.c.patch || true
-                # 修复 5.10.x ≤ 117 内核缺少 inotify_mark_user_mask 函数的编译错误
-                # SUSFS v2.0.0 在 fdinfo.c 中引入了此函数, 但该函数在 5.10.117 及以下内核版本中不存在
-                # 使用等效表达式 mark->mask & IN_ALL_EVENTS 替代
-                sed -i 's/inotify_mark_user_mask(mark)/mark->mask \& IN_ALL_EVENTS/g' ./fs/notify/fdinfo.c
-              fi
-              if [[ "$CURRENT_SUB" -le 43 ]]; then
-                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/base.c.patch ./
-                patch -p1 < base.c.patch || true
-                # TODO: 等待 WildKernels 更新补丁后移除注释
-                # # 修复 WildKernels 补丁中的旧符号 BIT_SUS_MAPS (SUSFS 仓库已重命名为 AS_FLAGS_SUS_MAP + test_bit)
-                # if grep -q 'BIT_SUS_MAPS' ./fs/proc/base.c; then
-                #   sed -i 's|unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_proc_umounted()|inode->i_mapping \&\& unlikely(test_bit(AS_FLAGS_SUS_MAP, \&inode->i_mapping->flags) \&\& susfs_is_current_proc_umounted_app())|g' ./fs/proc/base.c
-                # fi
-              fi
+          # Android 12 - 5.10 修复
+          if [[ "${{ inputs.android_version }}" == "android12" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
+            if [[ "$CURRENT_SUB" -le 209 ]]; then
+              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+            fi
+            if [[ "$CURRENT_SUB" -le 117 ]]; then
+              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/fdinfo.c.patch ./
+              patch -p1 < fdinfo.c.patch || true
+              # 修复 5.10.x ≤ 117 内核缺少 inotify_mark_user_mask 函数的编译错误
+              # SUSFS v2.0.0 在 fdinfo.c 中引入了此函数, 但该函数在 5.10.117 及以下内核版本中不存在
+              # 使用等效表达式 mark->mask & IN_ALL_EVENTS 替代
+              sed -i 's/inotify_mark_user_mask(mark)/mark->mask \& IN_ALL_EVENTS/g' ./fs/notify/fdinfo.c
+            fi
+            if [[ "$CURRENT_SUB" -le 43 ]]; then
+              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a12-5.10/base.c.patch ./
+              patch -p1 < base.c.patch || true
               # TODO: 等待 WildKernels 更新补丁后移除注释
-              # # 确保 base.c 包含 susfs_def.h (SUSFS 主补丁基于 5.10.246 重建, include hunk 可能静默失败)
-              # if grep -q 'AS_FLAGS_SUS_MAP\|susfs_is_current_proc_umounted' ./fs/proc/base.c && ! grep -qF 'susfs_def.h' ./fs/proc/base.c; then
-              #   sed -i '/#include <linux\/cpufreq_times.h>/a #endif' ./fs/proc/base.c
-              #   sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/susfs_def.h>' ./fs/proc/base.c
-              #   sed -i '/#include <linux\/cpufreq_times.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP' ./fs/proc/base.c
+              # # 修复 WildKernels 补丁中的旧符号 BIT_SUS_MAPS (SUSFS 仓库已重命名为 AS_FLAGS_SUS_MAP + test_bit)
+              # if grep -q 'BIT_SUS_MAPS' ./fs/proc/base.c; then
+              #   sed -i 's|unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_proc_umounted()|inode->i_mapping \&\& unlikely(test_bit(AS_FLAGS_SUS_MAP, \&inode->i_mapping->flags) \&\& susfs_is_current_proc_umounted_app())|g' ./fs/proc/base.c
               # fi
             fi
+            # TODO: 等待 WildKernels 更新补丁后移除注释
+            # # 确保 base.c 包含 susfs_def.h (SUSFS 主补丁基于 5.10.246 重建, include hunk 可能静默失败)
+            # if grep -q 'AS_FLAGS_SUS_MAP\|susfs_is_current_proc_umounted' ./fs/proc/base.c && ! grep -qF 'susfs_def.h' ./fs/proc/base.c; then
+            #   sed -i '/#include <linux\/cpufreq_times.h>/a #endif' ./fs/proc/base.c
+            #   sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/susfs_def.h>' ./fs/proc/base.c
+            #   sed -i '/#include <linux\/cpufreq_times.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP' ./fs/proc/base.c
+            # fi
+          fi
           
 
-            # Android 13 - 5.15 修复
-            if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" ]]; then
-              if [[ "$CURRENT_SUB" -le 41 ]]; then
-                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/namespace.c.patch ./
-                patch -p1 < namespace.c.patch || true
-                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/fdinfo.c.patch ./
-                patch -p1 < fdinfo.c.patch || true
-                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/open.c.patch ./
-                patch -p1 < open.c.patch || true
-                # TODO: 等待 WildKernels 更新补丁后移除注释
-                # # 修复 i_user_ns: 5.15.41 没有此函数, SUSFS 仓库重建后新增了 &fi->inode 变体
-                # sed -i 's|is_i_uid_not_allowed(i_uid_into_mnt(i_user_ns(&fi->inode), &fi->inode).val)))|is_i_uid_not_allowed(fi->inode.i_uid.val)))|g' fs/susfs.c
-                # sed -i 's|is_i_uid_not_allowed(i_uid_into_mnt(i_user_ns(inode), inode).val)))|is_i_uid_not_allowed(inode->i_uid.val)))|g' fs/susfs.c
-              fi
-              if [[ "$CURRENT_SUB" -le 148 && "${{ inputs.os_patch_level }}" != "2024-05" ]]; then
-                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+          # Android 13 - 5.15 修复
+          if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" ]]; then
+            if [[ "$CURRENT_SUB" -le 41 ]]; then
+              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/namespace.c.patch ./
+              patch -p1 < namespace.c.patch || true
+              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/fdinfo.c.patch ./
+              patch -p1 < fdinfo.c.patch || true
+              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/open.c.patch ./
+              patch -p1 < open.c.patch || true
+              # TODO: 等待 WildKernels 更新补丁后移除注释
+              # # 修复 i_user_ns: 5.15.41 没有此函数, SUSFS 仓库重建后新增了 &fi->inode 变体
+              # sed -i 's|is_i_uid_not_allowed(i_uid_into_mnt(i_user_ns(&fi->inode), &fi->inode).val)))|is_i_uid_not_allowed(fi->inode.i_uid.val)))|g' fs/susfs.c
+              # sed -i 's|is_i_uid_not_allowed(i_uid_into_mnt(i_user_ns(inode), inode).val)))|is_i_uid_not_allowed(inode->i_uid.val)))|g' fs/susfs.c
+            fi
+            if [[ "$CURRENT_SUB" -le 148 && "${{ inputs.os_patch_level }}" != "2024-05" ]]; then
+              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+            fi
+          fi
+
+
+          # Android 14 - 6.1 修复
+          if [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "6.1" ]]; then
+            if [[ "$CURRENT_SUB" -le 141 || "$CURRENT_SUB" -ge 145 ]]; then
+              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a14-6.1/base.c.patch ./
+              patch -p1 < base.c.patch || true
+            fi
+            if ! grep -qF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
+              sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
+            fi
+            if grep -q 'susfs_is_current_proc_umounted' ./fs/proc/base.c && ! grep -qF '#include <linux/susfs.h>' ./fs/proc/base.c; then
+              sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs.h>' ./fs/proc/base.c
+            fi
+            if [[ "$CURRENT_SUB" -le 75 && "${{ inputs.os_patch_level }}" != "2024-05" ]]; then
+              sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+            fi
+            # 修复 6.1 LTS: SUSFS 补丁在 namespace.c 头部 hunk 因上下文不匹配而失败，
+            # 导致函数体中的 SUSFS 符号（DEFAULT_KSU_MNT_ID 等）未声明
+            if grep -q 'DEFAULT_KSU_MNT_ID\|susfs_mnt_id_ida' ./fs/namespace.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/namespace.c; then
+              echo "检测到 namespace.c 缺少 susfs_def.h，注入声明..."
+              sed -i '/#include <linux\/mnt_idmapping.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\n#endif' ./fs/namespace.c
+              if ! grep -q 'extern bool susfs_is_current_ksu_domain' ./fs/namespace.c; then
+                sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern bool susfs_is_sdcard_android_data_decrypted __read_mostly;\n\n#define CL_COPY_MNT_NS BIT(25)\n\nstatic DEFINE_IDA(susfs_mnt_id_ida);\nstatic DEFINE_IDA(susfs_mnt_group_ida);\n\n#endif' ./fs/namespace.c
               fi
             fi
+          fi
 
-
-            # Android 14 - 6.1 修复
-            if [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "6.1" ]]; then
-              if [[ "$CURRENT_SUB" -le 141 || "$CURRENT_SUB" -ge 145 ]]; then
-                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a14-6.1/base.c.patch ./
-                patch -p1 < base.c.patch || true
-              fi
+          # Android 15 - 6.6 修复
+          if [[ "${{ inputs.android_version }}" == "android15" && "${{ inputs.kernel_version }}" == "6.6" ]]; then
+            if [[ "$CURRENT_SUB" -ge 98 ]]; then
+              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/base.c.patch ./
+              patch -p1 < base.c.patch || true
+            fi
+            # 修复 6.6.50~6.6.97: SUSFS 补丁引用了 AS_FLAGS_SUS_MAP / susfs_is_current_proc_umounted_app
+            # 但缺少 #include <linux/susfs_def.h>，导致编译报 undeclared identifier
+            if grep -q 'AS_FLAGS_SUS_MAP\|susfs_is_current_proc_umounted' ./fs/proc/base.c && ! grep -qF 'susfs_def.h' ./fs/proc/base.c; then
               if ! grep -qF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
                 sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
               fi
-              if grep -q 'susfs_is_current_proc_umounted' ./fs/proc/base.c && ! grep -qF '#include <linux/susfs.h>' ./fs/proc/base.c; then
-                sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs.h>' ./fs/proc/base.c
-              fi
-              if [[ "$CURRENT_SUB" -le 75 && "${{ inputs.os_patch_level }}" != "2024-05" ]]; then
-                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-              fi
-              # 修复 6.1 LTS: SUSFS 补丁在 namespace.c 头部 hunk 因上下文不匹配而失败，
-              # 导致函数体中的 SUSFS 符号（DEFAULT_KSU_MNT_ID 等）未声明
-              if grep -q 'DEFAULT_KSU_MNT_ID\|susfs_mnt_id_ida' ./fs/namespace.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/namespace.c; then
-                echo "检测到 namespace.c 缺少 susfs_def.h，注入声明..."
-                sed -i '/#include <linux\/mnt_idmapping.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\n#endif' ./fs/namespace.c
-                if ! grep -q 'extern bool susfs_is_current_ksu_domain' ./fs/namespace.c; then
-                  sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern bool susfs_is_sdcard_android_data_decrypted __read_mostly;\n\n#define CL_COPY_MNT_NS BIT(25)\n\nstatic DEFINE_IDA(susfs_mnt_id_ida);\nstatic DEFINE_IDA(susfs_mnt_group_ida);\n\n#endif' ./fs/namespace.c
-                fi
-              fi
+              sed -i '/#include <linux\/dma-buf.h>/a #endif' ./fs/proc/base.c
+              sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs_def.h>' ./fs/proc/base.c
+              sed -i '/#include <linux\/dma-buf.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP' ./fs/proc/base.c
             fi
-
-            # Android 15 - 6.6 修复
-            if [[ "${{ inputs.android_version }}" == "android15" && "${{ inputs.kernel_version }}" == "6.6" ]]; then
-              if [[ "$CURRENT_SUB" -ge 98 ]]; then
-                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/base.c.patch ./
-                patch -p1 < base.c.patch || true
+            # 修复 ReSukiSU: SUSFS 补丁使用 SUSFS_IS_INODE_SUS_MAP / SUSFS_IS_INODE_OPEN_REDIRECT
+            # 但缺少 #include <linux/susfs.h>，导致编译报 undeclared identifier
+            if grep -q 'SUSFS_IS_INODE_SUS_MAP\|SUSFS_IS_INODE_OPEN_REDIRECT' ./fs/proc/base.c && ! grep -qF '#include <linux/susfs.h>' ./fs/proc/base.c; then
+              if ! grep -qF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
+                sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
               fi
-              # 修复 6.6.50~6.6.97: SUSFS 补丁引用了 AS_FLAGS_SUS_MAP / susfs_is_current_proc_umounted_app
-              # 但缺少 #include <linux/susfs_def.h>，导致编译报 undeclared identifier
-              if grep -q 'AS_FLAGS_SUS_MAP\|susfs_is_current_proc_umounted' ./fs/proc/base.c && ! grep -qF 'susfs_def.h' ./fs/proc/base.c; then
-                if ! grep -qF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
-                  sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
-                fi
-                sed -i '/#include <linux\/dma-buf.h>/a #endif' ./fs/proc/base.c
-                sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs_def.h>' ./fs/proc/base.c
-                sed -i '/#include <linux\/dma-buf.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP' ./fs/proc/base.c
-              fi
-              # 修复 ReSukiSU: SUSFS 补丁使用 SUSFS_IS_INODE_SUS_MAP / SUSFS_IS_INODE_OPEN_REDIRECT
-              # 但缺少 #include <linux/susfs.h>，导致编译报 undeclared identifier
-              if grep -q 'SUSFS_IS_INODE_SUS_MAP\|SUSFS_IS_INODE_OPEN_REDIRECT' ./fs/proc/base.c && ! grep -qF '#include <linux/susfs.h>' ./fs/proc/base.c; then
-                if ! grep -qF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
-                  sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
-                fi
-                sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs.h>' ./fs/proc/base.c
-              fi
-              if [[ "$CURRENT_SUB" -le 58 ]]; then
-                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/task_mmu.c.patch ./
-                patch -p1 < task_mmu.c.patch || true
-              fi
+              sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs.h>' ./fs/proc/base.c
             fi
+            if [[ "$CURRENT_SUB" -le 58 ]]; then
+              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/task_mmu.c.patch ./
+              patch -p1 < task_mmu.c.patch || true
+            fi
+          fi
 
-            # Android 16 - 6.12 修复
-            if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "6.12" ]]; then
-              # 修复 setuid_hook.c 重复定义: 当 CONFIG_KSU_SUSFS 启用时，
-              # 底部 #if (>=6.8 && MANUAL_HOOK) 块会产生第二个 ksu_handle_setresuid 定义
-              SETUID_HOOK="$KERNEL_ROOT/common/drivers/kernelsu/setuid_hook.c"
-              if [ -f "$SETUID_HOOK" ]; then
-                sed -i 's/defined(CONFIG_KSU_MANUAL_HOOK))/!defined(CONFIG_KSU_SUSFS) \&\& defined(CONFIG_KSU_MANUAL_HOOK))/' "$SETUID_HOOK"
-                echo "已修复 setuid_hook.c 重复定义问题"
-              fi
-              # 修复 6.12: SUSFS 补丁在 exec.c 头部 hunk 因上下文不匹配而失败
-              # 原因: 6.12 内核在 ksm.h 和 uaccess.h 之间多了一行 #include <linux/dma-buf.h>
-              # 导致 susfs_def.h 头文件注入失败, 函数体中 susfs_is_current_proc_umounted() 未声明
-              if grep -q 'susfs_is_current_proc_umounted' ./fs/exec.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/exec.c; then
-                echo "检测到 exec.c 缺少 susfs_def.h，注入声明..."
-                sed -i '/#include <linux\/ksm\.h>/a #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif' ./fs/exec.c
-              fi
+          # Android 16 - 6.12 修复
+          if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "6.12" ]]; then
+            # 修复 setuid_hook.c 重复定义: 当 CONFIG_KSU_SUSFS 启用时，
+            # 底部 #if (>=6.8 && MANUAL_HOOK) 块会产生第二个 ksu_handle_setresuid 定义
+            SETUID_HOOK="$KERNEL_ROOT/common/drivers/kernelsu/setuid_hook.c"
+            if [ -f "$SETUID_HOOK" ]; then
+              sed -i 's/defined(CONFIG_KSU_MANUAL_HOOK))/!defined(CONFIG_KSU_SUSFS) \&\& defined(CONFIG_KSU_MANUAL_HOOK))/' "$SETUID_HOOK"
+              echo "已修复 setuid_hook.c 重复定义问题"
+            fi
+            # 修复 6.12: SUSFS 补丁在 exec.c 头部 hunk 因上下文不匹配而失败
+            # 原因: 6.12 内核在 ksm.h 和 uaccess.h 之间多了一行 #include <linux/dma-buf.h>
+            # 导致 susfs_def.h 头文件注入失败, 函数体中 susfs_is_current_proc_umounted() 未声明
+            if grep -q 'susfs_is_current_proc_umounted' ./fs/exec.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/exec.c; then
+              echo "检测到 exec.c 缺少 susfs_def.h，注入声明..."
+              sed -i '/#include <linux\/ksm\.h>/a #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif' ./fs/exec.c
             fi
           fi
 
@@ -880,7 +831,7 @@ jobs:
       - name: 启用kpm
         if: inputs.use_kpm
         run: |
-          if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
+          if [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ]; then
             echo "CONFIG_KPM=y" >> "$DEFCONFIG"
           fi
 
