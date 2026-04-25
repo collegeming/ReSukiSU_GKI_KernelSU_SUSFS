@@ -490,6 +490,9 @@ jobs:
               #   sed -i 's|unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_proc_umounted()|inode->i_mapping \&\& unlikely(test_bit(AS_FLAGS_SUS_MAP, \&inode->i_mapping->flags) \&\& susfs_is_current_proc_umounted_app())|g' ./fs/proc/base.c
               # fi
             fi
+            if grep -q 'vm_flags_clear(new_vma, VM_PAD_MASK)' ./mm/mmap.c; then
+              sed -i 's/vm_flags_clear(new_vma, VM_PAD_MASK);/new_vma->vm_flags \&= ~VM_PAD_MASK;/g' ./mm/mmap.c
+            fi
             # TODO: 等待 WildKernels 更新补丁后移除注释
             # # 确保 base.c 包含 susfs_def.h (SUSFS 主补丁基于 5.10.246 重建, include hunk 可能静默失败)
             # if grep -q 'AS_FLAGS_SUS_MAP\|susfs_is_current_proc_umounted' ./fs/proc/base.c && ! grep -qF 'susfs_def.h' ./fs/proc/base.c; then
@@ -509,6 +512,9 @@ jobs:
               patch -p1 < fdinfo.c.patch || true
               cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/open.c.patch ./
               patch -p1 < open.c.patch || true
+              if grep -q 'vm_flags_clear(new_vma, VM_PAD_MASK)' ./common/mm/mmap.c; then
+                sed -i 's/vm_flags_clear(new_vma, VM_PAD_MASK);/new_vma->vm_flags \&= ~VM_PAD_MASK;/g' ./common/mm/mmap.c
+              fi
               # TODO: 等待 WildKernels 更新补丁后移除注释
               # # 修复 i_user_ns: 5.15.41 没有此函数, SUSFS 仓库重建后新增了 &fi->inode 变体
               # sed -i 's|is_i_uid_not_allowed(i_uid_into_mnt(i_user_ns(&fi->inode), &fi->inode).val)))|is_i_uid_not_allowed(fi->inode.i_uid.val)))|g' fs/susfs.c
@@ -543,6 +549,11 @@ jobs:
               if ! grep -q 'extern bool susfs_is_current_ksu_domain' ./fs/namespace.c; then
                 sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern bool susfs_is_sdcard_android_data_decrypted __read_mostly;\n\n#define CL_COPY_MNT_NS BIT(25)\n\nstatic DEFINE_IDA(susfs_mnt_id_ida);\nstatic DEFINE_IDA(susfs_mnt_group_ida);\n\n#endif' ./fs/namespace.c
               fi
+            fi
+            # 修复 namespace.c 中 static_key 与 bool 类型不匹配的编译错误
+            if grep -q 'susfs_is_sdcard_android_data_not_decrypted' ./fs/namespace.c; then
+              echo "修复 namespace.c 中的 decrypted 状态判断语法..."
+              sed -i 's/static_branch_unlikely(&susfs_is_sdcard_android_data_not_decrypted)/unlikely(!susfs_is_sdcard_android_data_decrypted)/g' ./fs/namespace.c
             fi
           fi
 
