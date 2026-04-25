@@ -544,16 +544,10 @@ jobs:
             # 修复 6.1 LTS: SUSFS 补丁在 namespace.c 头部 hunk 因上下文不匹配而失败，
             # 导致函数体中的 SUSFS 符号（DEFAULT_KSU_MNT_ID 等）未声明
             if grep -q 'DEFAULT_KSU_MNT_ID\|susfs_mnt_id_ida' ./fs/namespace.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/namespace.c; then
-              echo "检测到 namespace.c 缺少 susfs_def.h，注入声明..."
               sed -i '/#include <linux\/mnt_idmapping.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\n#endif' ./fs/namespace.c
-              if ! grep -q 'extern bool susfs_is_current_ksu_domain' ./fs/namespace.c; then
-                sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern bool susfs_is_sdcard_android_data_decrypted __read_mostly;\n\n#define CL_COPY_MNT_NS BIT(25)\n\nstatic DEFINE_IDA(susfs_mnt_id_ida);\nstatic DEFINE_IDA(susfs_mnt_group_ida);\n\n#endif' ./fs/namespace.c
+              if ! grep -q 'susfs_is_current_ksu_domain' ./fs/namespace.c; then
+                sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_false susfs_is_sdcard_android_data_not_decrypted;\n\n#define CL_COPY_MNT_NS BIT(25)\n\nstatic DEFINE_IDA(susfs_mnt_id_ida);\nstatic DEFINE_IDA(susfs_mnt_group_ida);\n\n#endif' ./fs/namespace.c
               fi
-            fi
-            # 修复 namespace.c 中 static_key 与 bool 类型不匹配的编译错误
-            if grep -q 'susfs_is_sdcard_android_data_not_decrypted' ./fs/namespace.c; then
-              echo "修复 namespace.c 中的 decrypted 状态判断语法..."
-              sed -i 's/static_branch_unlikely(&susfs_is_sdcard_android_data_not_decrypted)/unlikely(!susfs_is_sdcard_android_data_decrypted)/g' ./fs/namespace.c
             fi
           fi
 
