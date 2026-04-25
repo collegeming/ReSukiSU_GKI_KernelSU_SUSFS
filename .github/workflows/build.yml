@@ -512,8 +512,8 @@ jobs:
               patch -p1 < fdinfo.c.patch || true
               cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a13-5.15/open.c.patch ./
               patch -p1 < open.c.patch || true
-              if grep -q 'vm_flags_clear(new_vma, VM_PAD_MASK)' ./common/mm/mmap.c; then
-                sed -i 's/vm_flags_clear(new_vma, VM_PAD_MASK);/new_vma->vm_flags \&= ~VM_PAD_MASK;/g' ./common/mm/mmap.c
+              if grep -q 'vm_flags_clear(new_vma, VM_PAD_MASK)' ./mm/mmap.c; then
+                sed -i 's/vm_flags_clear(new_vma, VM_PAD_MASK);/new_vma->vm_flags \&= ~VM_PAD_MASK;/g' ./mm/mmap.c
               fi
               # TODO: 等待 WildKernels 更新补丁后移除注释
               # # 修复 i_user_ns: 5.15.41 没有此函数, SUSFS 仓库重建后新增了 &fi->inode 变体
