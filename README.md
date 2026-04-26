@@ -41,7 +41,7 @@
 <table>
 <tr>
 <td align="center" width="33%">📖 <b><a href="https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki">文档</a></b></td>
-<td align="center" width="34%">📥 <b><a href="https://github.com/zzh20188/GKI_KernelSU_SUSFS/releases">下载</a></b></td>
+<td align="center" width="34%">📥 <b><a href="https://github.com/ReSukiSU-GKI/GKI_KernelSU_SUSFS/releases">下载</a></b></td>
 <td align="center" width="33%">🔰 <b><a href="https://zzh20188.github.io/GKI_KernelSU_SUSFS/guide.html">新手教程</a></b></td>
 </tr>
 </table>
