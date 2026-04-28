@@ -561,6 +561,7 @@ jobs:
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
           Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
+          Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           KPatch-Next Support = true</pre>
           Change Log: 
           <pre>${INPUT_CHANGE_LOG}
@@ -601,6 +602,7 @@ jobs:
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
           Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
+          Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           KPatch-Next Support = true</pre>
           Change Log: 
           <pre>${INPUT_CHANGE_LOG}
@@ -642,6 +644,7 @@ jobs:
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
           Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
+          Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           KPatch-Next Support = true</pre>
           Change Log: 
           <pre>${INPUT_CHANGE_LOG}
