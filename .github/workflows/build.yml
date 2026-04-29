@@ -546,7 +546,7 @@ jobs:
             if grep -q 'DEFAULT_KSU_MNT_ID\|susfs_mnt_id_ida' ./fs/namespace.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/namespace.c; then
               sed -i '/#include <linux\/mnt_idmapping.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux\/susfs_def.h>\n#endif' ./fs/namespace.c
               if ! grep -q 'extern bool susfs_is_current_ksu_domain' ./fs/namespace.c; then
-                sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_false susfs_is_sdcard_android_data_not_decrypted;\nextern bool susfs_is_sdcard_android_data_decrypted __read_mostly;\n\n#define CL_COPY_MNT_NS BIT(25)\n\nstatic DEFINE_IDA(susfs_mnt_id_ida);\nstatic DEFINE_IDA(susfs_mnt_group_ida);\n\n#endif' ./fs/namespace.c
+                sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_false susfs_is_sdcard_android_data_not_decrypted;\nextern bool susfs_is_sdcard_android_data_decrypted __read_mostly;\n\n#define CL_COPY_MNT_NS BIT(25)\n\nstatic __maybe_unused DEFINE_IDA(susfs_mnt_id_ida);\nstatic __maybe_unused DEFINE_IDA(susfs_mnt_group_ida);\n\n#endif' ./fs/namespace.c
               fi
             fi
           fi
