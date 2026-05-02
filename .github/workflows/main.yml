@@ -548,7 +548,7 @@ jobs:
           INPUT_COMMIT="${{ inputs.commit }}"
           INPUT_CHANGE_LOG="${{ inputs.change_log }}"
 
-          TEXT=$(cat <<'EOF'
+          TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
           
           Branch: <code>${{ github.ref_name }}</code>
@@ -589,7 +589,7 @@ jobs:
           INPUT_COMMIT="${{ inputs.commit }}"
           INPUT_CHANGE_LOG="${{ inputs.change_log }}"
 
-          TEXT=$(cat <<'EOF'
+          TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
           
           Branch: <code>${{ github.ref_name }}</code>
@@ -631,7 +631,7 @@ jobs:
           INPUT_COMMIT="${{ inputs.commit }}"
           INPUT_CHANGE_LOG="${{ inputs.change_log }}"
 
-          TEXT=$(cat <<'EOF'
+          TEXT=$(cat <<EOF
           <b>New GKI Release:</b>
           
           Branch: <code>${{ github.ref_name }}</code>
