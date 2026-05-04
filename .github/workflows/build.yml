@@ -650,6 +650,21 @@ jobs:
             fi
           fi
 
+          # Android 16 / 6.12 的 rust_binder.ko 在启用 IPC_NS 后会引用
+          # init_ipc_ns 与 put_ipc_ns，但当前 AOSP common 分支尚未导出这两个符号。
+          # 这里补齐导出，避免 modpost 因 undefined symbol 失败。
+          if [ "$KERNEL_VER" = "6.12" ]; then
+            if [ -f "ipc/msgutil.c" ] && ! grep -qF 'EXPORT_SYMBOL(init_ipc_ns);' "ipc/msgutil.c"; then
+              sed -i '/^struct msg_msgseg {/i EXPORT_SYMBOL(init_ipc_ns);' "ipc/msgutil.c"
+              echo "已为 init_ipc_ns 补充符号导出"
+            fi
+
+            if [ -f "ipc/namespace.c" ] && ! grep -qF 'EXPORT_SYMBOL(put_ipc_ns);' "ipc/namespace.c"; then
+              sed -i '/^static struct ns_common \*ipcns_get(/i EXPORT_SYMBOL(put_ipc_ns);' "ipc/namespace.c"
+              echo "已为 put_ipc_ns 补充符号导出"
+            fi
+          fi
+
           echo "添加 Droidspaces 内核配置..."
           # 按文档规则逐个处理: 已启用则跳过, "# not set" 则替换, 不存在则追加
           enable_config() {
