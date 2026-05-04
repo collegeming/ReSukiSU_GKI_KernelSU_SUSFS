@@ -665,6 +665,20 @@ jobs:
             fi
           }
 
+          config_defined() {
+            local name="${1#CONFIG_}"
+            grep -RqsE --include='Kconfig*' "^[[:space:]]*(menuconfig|config)[[:space:]]+${name}$" .
+          }
+
+          enable_config_if_defined() {
+            local cfg="$1"
+            if config_defined "$cfg"; then
+              enable_config "$cfg"
+            else
+              echo "  当前内核未定义: $cfg，跳过"
+            fi
+          }
+
           # 必要配置
           enable_config CONFIG_SYSVIPC
           enable_config CONFIG_POSIX_MQUEUE
@@ -673,14 +687,17 @@ jobs:
           enable_config CONFIG_DEVTMPFS
 
           # 可选: 网络相关配置 (Docker/NAT 模式)
-          enable_config CONFIG_NETFILTER_XT_MATCH_ADDRTYPE
-          enable_config CONFIG_NETFILTER_XT_TARGET_REJECT
-          enable_config CONFIG_NETFILTER_XT_TARGET_LOG
-          enable_config CONFIG_NETFILTER_XT_MATCH_RECENT
-          enable_config CONFIG_IP_SET
-          enable_config CONFIG_IP_SET_HASH_IP
-          enable_config CONFIG_IP_SET_HASH_NET
-          enable_config CONFIG_NETFILTER_XT_SET
+          enable_config_if_defined CONFIG_NETFILTER_XT_MATCH_ADDRTYPE
+          enable_config_if_defined CONFIG_NETFILTER_XT_TARGET_LOG
+          enable_config_if_defined CONFIG_NETFILTER_XT_MATCH_RECENT
+          enable_config_if_defined CONFIG_IP_SET
+          enable_config_if_defined CONFIG_IP_SET_HASH_IP
+          enable_config_if_defined CONFIG_IP_SET_HASH_NET
+          enable_config_if_defined CONFIG_NETFILTER_XT_SET
+
+          # REJECT 目标在不同内核版本上的符号名可能不同，按实际存在的配置启用
+          enable_config_if_defined CONFIG_NETFILTER_XT_TARGET_REJECT
+          enable_config_if_defined CONFIG_IP_NF_TARGET_REJECT
 
           echo "Droidspaces 集成完成"
 
