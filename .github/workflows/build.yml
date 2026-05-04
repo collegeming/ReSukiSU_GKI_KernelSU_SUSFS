@@ -610,6 +610,11 @@ jobs:
           git clone --depth 1 https://github.com/ravindu644/Droidspaces-OSS.git /tmp/Droidspaces-OSS
           echo "DROIDSPACES_PATCHES=/tmp/Droidspaces-OSS/Documentation/resources/kernel-patches/GKI" >> $GITHUB_ENV
 
+      # ==================== 备份原始 defconfig ====================
+      # 用于后续生成 defconfig fragment（bazel trim 兼容）
+      - name: 备份原始 defconfig
+        run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
+
       - name: 集成 Droidspaces 支持
         if: inputs.droidspaces != 'off'
         working-directory: ${{ env.KERNEL_ROOT }}/common
@@ -777,11 +782,6 @@ jobs:
 
           # 小米：补充符号（幂等）
           ensure_line_once "$XIAOMI_SYMBOL_LIST" "device_find_any_child"
-
-      # ==================== 备份原始 defconfig ====================
-      # 用于后续生成 defconfig fragment（bazel trim 兼容）
-      - name: 备份原始 defconfig
-        run: cp "$DEFCONFIG" "$DEFCONFIG.orig"
 
       # ==================== 配置 ZRAM 选项 ====================
       # 启用各种 ZRAM 压缩算法
