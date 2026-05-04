@@ -83,10 +83,8 @@ Wiki 涵盖内容：
 ## 🧪 Droidspaces 容器支持（实验性）
 
 > **实验性功能：** 不保证所有 GKI 版本均能成功构建或启动，刷入前请务必备份 Boot 镜像。
-
+> **TIPS：** 工作流使用的是 [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) 的 [官方补丁](https://github.com/ravindu644/Droidspaces-OSS/tree/main/Documentation/resources/kernel-patches/GKI) ，如有更好的补丁可以提个issues，此外由于存在三个补丁，或许需要反复试验以确保其中一个适配你的机型，请根据他人或实际经验来选择。
 [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) 是一个轻量级的 Linux 容器工具，可以在 Android 上运行完整的 Linux 环境（支持 systemd、OpenRC 等），用于搭建开发环境、运行服务器等场景。
-
-由于 GKI 内核的 ABI 兼容性限制，直接开启容器所需的内核选项会导致 vendor 模块（GPU、相机等）不兼容而 bootloop。此功能通过应用专用补丁解决该问题，使内核在启用容器支持的同时保持与原厂模块的兼容。
 
 **支持范围：** 5.10 / 5.15 / 6.1 / 6.6 / 6.12
 
