@@ -50,6 +50,31 @@ Wiki covers:
 
 ---
 
+## 🧪 Droidspaces Container Support (Experimental)
+
+> **Experimental feature:** Successful build and boot is not guaranteed across all GKI versions. Always back up your boot image before flashing.
+
+[Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) is a lightweight Linux containerization tool that lets you run full Linux environments (with systemd, OpenRC, etc.) on Android — useful for development, running servers, and more.
+
+GKI kernels enforce strict ABI compatibility, so enabling the kernel options required for containers would normally break vendor modules (GPU, camera, etc.) and cause bootloops. This feature applies special patches to solve that, enabling container support while keeping vendor module compatibility intact.
+
+**Supported versions:** 5.10 / 5.15 / 6.1 / 6.6 / 6.12
+
+**Usage:** When triggering a build manually, select the `Droidspaces` option:
+
+| Option | Description |
+|:---:|:---|
+| `off` | Disabled (default) |
+| `678` | Use 6_7_8 slot patch (recommended) |
+| `123` | Use 1_2_3 slot patch (fallback) |
+| `345` | Use 3_4_5 slot patch (fallback) |
+
+> **Note:** Kernel 6.12 has only one patch — any non-off option will use it.
+
+**If the build fails or bootloops after flashing:** Try switching to a different slot patch (e.g. 678 → 123 or 345). Different kernel sub-levels may require different patches.
+
+---
+
 ## ❗ Common Build Failure Cause (SukiSU / SUSFS Out of Sync)
 
 When the following two branches update at different paces, builds may fail:

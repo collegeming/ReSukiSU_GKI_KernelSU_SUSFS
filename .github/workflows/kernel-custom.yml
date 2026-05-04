@@ -100,6 +100,16 @@ on:
         required: false
         type: boolean
         default: false
+      droidspaces:
+        description: "Droidspaces 容器支持 (5.10~6.6: 槽位补丁, 6.12: 开/关)"
+        required: false
+        type: choice
+        options:
+          - "off"
+          - "678"
+          - "123"
+          - "345"
+        default: "off"
 
 jobs:
   build-custom-kernel:
@@ -122,6 +132,7 @@ jobs:
       use_rekernel: ${{ inputs.use_rekernel || false }}
       supp_op: ${{ inputs.supp_op || false }}
       enable_susfs: ${{ !inputs.cancel_susfs }}
+      droidspaces: ${{ inputs.droidspaces || 'off' }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml

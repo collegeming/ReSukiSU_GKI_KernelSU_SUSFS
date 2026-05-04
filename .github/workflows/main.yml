@@ -77,6 +77,15 @@ on:
         description: "禁用 SUSFS"
         type: boolean
         default: false
+      droidspaces:
+        description: "Droidspaces 容器支持 (5.10~6.6: 槽位补丁, 6.12: 开/关)"
+        type: choice
+        options:
+          - "off"
+          - "678"
+          - "123"
+          - "345"
+        default: "off"
 
       # ==================== 构建版本选择 ====================
       build_a12_5_10:
@@ -137,6 +146,7 @@ jobs:
       use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      droidspaces: ${{ inputs.droidspaces }}
       called_from_main: true
 
   # ==================== Android 13 - 5.15 构建 ====================
@@ -153,6 +163,7 @@ jobs:
       use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      droidspaces: ${{ inputs.droidspaces }}
       called_from_main: true
 
   # ==================== Android 14 - 6.1 构建 ====================
@@ -169,6 +180,7 @@ jobs:
       use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      droidspaces: ${{ inputs.droidspaces }}
       called_from_main: true
 
   # ==================== Android 15 - 6.6 构建 ====================
@@ -185,6 +197,7 @@ jobs:
       use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      droidspaces: ${{ inputs.droidspaces }}
       called_from_main: true
 
   # ==================== Android 16 - 6.12 构建 ====================
@@ -201,6 +214,7 @@ jobs:
       use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
+      droidspaces: ${{ inputs.droidspaces }}
       called_from_main: true
 
   # ==================== 收集补丁冲突文件 ====================
