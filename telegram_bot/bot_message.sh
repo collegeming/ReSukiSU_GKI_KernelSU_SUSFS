@@ -1,29 +1,27 @@
 #!/bin/bash
-# 远程 curl 调用发 TG 消息，无交互、无硬编码 token
+# 极简调用：curl -sL 脚本地址 | bash -s <token> <chat_id> [thread_id] <msg>
 
-# 用法：
-# curl -sL https://raw.githubusercontent.com/xxx/xxx/bot_message.sh | bash -s "BOT_TOKEN" "CHAT_ID" "THREAD_ID" "消息内容"
-
-BOT_TOKEN="$1"
-CHAT_ID="$2"
-MESSAGE_THREAD_ID="$3"
-TEXT="$4"
-
-if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ] || [ -z "$TEXT" ]; then
-  echo "用法："
-  echo "curl -sL https://xxx.sh | bash -s \"BOT_TOKEN\" \"CHAT_ID\" \"THREAD_ID\" \"消息\""
+[ $# -lt 3 ] && {
+  echo "用法：curl -sL 脚本地址 | bash -s 机器人令牌 聊天ID 消息内容"
+  echo "用法：curl -sL 脚本地址 | bash -s 机器人令牌 聊天ID 话题ID 消息内容"
   exit 1
+}
+
+export BOT_TOKEN="$1"
+export CHAT_ID="$2"
+
+if [ $# -eq 3 ]; then
+  export TEXT="$3"
+  curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+    -d chat_id="$CHAT_ID" \
+    -d text="$TEXT" > /dev/null
+elif [ $# -ge 4 ]; then
+  export THREAD_ID="$3"
+  export TEXT="${@:4}"
+  curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+    -d chat_id="$CHAT_ID" \
+    -d message_thread_id="$THREAD_ID" \
+    -d text="$TEXT" > /dev/null
 fi
 
-if [ -z "$MESSAGE_THREAD_ID" ]; then
-  curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-    -d chat_id="${CHAT_ID}" \
-    -d text="${TEXT}"
-else
-  curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-    -d chat_id="${CHAT_ID}" \
-    -d message_thread_id="${MESSAGE_THREAD_ID}" \
-    -d text="${TEXT}"
-fi
-
-echo -e "\n✅ 消息发送完成"
+echo "✅ 消息已发送"
