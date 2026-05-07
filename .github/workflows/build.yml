@@ -240,11 +240,11 @@ jobs:
       # 克隆 AnyKernel3、SUSFS、各种补丁仓库
       - name: 克隆依赖仓库
         run: |
-          ANYKERNEL_BRANCH="gki-2.0"
+          ANYKERNEL_BRANCH="master"
           SUSFS_BRANCH="gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}"
 
           echo "克隆 AnyKernel3..."
-          git clone https://github.com/coolzyd9107/AnyKernel3.git -b "master"
+          git clone https://github.com/ReSukiSU-GKI/AnyKernel3.git -b "master"
           rm -rf AnyKernel3/.git
 
           echo "克隆 SUSFS (分支: $SUSFS_BRANCH)..."
