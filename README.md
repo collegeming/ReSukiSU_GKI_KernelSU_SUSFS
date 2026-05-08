@@ -1,7 +1,7 @@
 <div align="center">
 
 # GKI KernelSU SUSFS
-### 🏮 2026 🐎 Happy New Year! 🏮
+### 专为ReSukiSU打造的自动构建仓库
 
 **自动化构建 GKI 内核 | 集成 KernelSU + SUSFS**
 
