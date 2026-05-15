@@ -104,7 +104,6 @@ jobs:
       #           "version": "",
       #           "use_zram": "false",
       #           "use_bbg": "true",
-      #           "use_kpm": "true",
       #           "get_manager": "true"
       #         }
       #       }'

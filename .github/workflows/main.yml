@@ -65,10 +65,6 @@ on:
         description: "启用 BBG 防格机"
         type: boolean
         default: false
-      use_kpm:
-        description: "启用 KPM 功能"
-        type: boolean
-        default: false
       use_rekernel:
         description: "启用 Re-Kernel 驱动"
         type: boolean
@@ -143,7 +139,6 @@ jobs:
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
-      use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
@@ -160,7 +155,6 @@ jobs:
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
-      use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
@@ -177,7 +171,6 @@ jobs:
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
-      use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
@@ -194,7 +187,6 @@ jobs:
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
-      use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
@@ -211,7 +203,6 @@ jobs:
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
-      use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel }}
       cancel_susfs: ${{ inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces }}
@@ -294,7 +285,6 @@ jobs:
 
           echo "LZ4_STATUS=${{ inputs.use_zram && '开启' || '未开启' }}" >> $GITHUB_ENV
           echo "BBG_STATUS=${{ inputs.use_bbg && '支持' || '不支持' }}" >> $GITHUB_ENV
-          echo "KPM_LINE=${{ inputs.use_kpm && '-> KPM 支持' || '' }}" >> $GITHUB_ENV
           echo "LZ4_SUFFIX=${{ inputs.use_zram && '、LZ4KD' || '' }}" >> $GITHUB_ENV
 
           echo "HOOK_TYPE=-> SUSFS Inline Hooks" >> $GITHUB_ENV
@@ -403,7 +393,6 @@ jobs:
 
           ${{ env.HOOK_TYPE }}
           ${{ env.MOUNT_TYPE }}
-          ${{ env.KPM_LINE }} 
 
           > 💡 [Unicode 零宽绕过修复](https://t.me/real5ec1cff/268) - 请使用 Xposed 模块
 
@@ -574,7 +563,6 @@ jobs:
           SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
-          Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
           Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           KPatch-Next Support = true</pre>
           Change Log: 
@@ -615,7 +603,6 @@ jobs:
           SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
-          Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
           Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           KPatch-Next Support = true</pre>
           Change Log: 
@@ -657,7 +644,6 @@ jobs:
           SuSFS = ${{ inputs.cancel_susfs && 'false' || 'true' }}
           BBG = ${{ inputs.use_bbg && 'true' || 'false' }}
           LZ4KD = ${{ inputs.use_zram && 'true' || 'false' }}
-          Built-in KPM = ${{ inputs.use_kpm && 'true' || 'false' }}
           Re-Kernel = ${{ inputs.use_rekernel && 'true' || 'false' }}
           KPatch-Next Support = true</pre>
           Change Log: 

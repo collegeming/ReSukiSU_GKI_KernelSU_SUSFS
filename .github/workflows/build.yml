@@ -61,10 +61,6 @@ on:
         required: true
         type: boolean
         default: true
-      use_kpm:
-        required: true
-        type: boolean
-        default: true
       use_rekernel:
         required: false
         type: boolean
@@ -113,7 +109,6 @@ jobs:
           echo "SUSFS 状态    : ${{ inputs.enable_susfs }}"
           echo "ZRAM 增强     : ${{ inputs.use_zram }}"
           echo "BBG 补丁      : ${{ inputs.use_bbg }}"
-          echo "KPM 功能      : ${{ inputs.use_kpm }}"
           echo "Re-Kernel     : ${{ inputs.use_rekernel }}"
           echo "Droidspaces   : ${{ inputs.droidspaces }}"
           echo "Stock Config  : 自动检测 config/stock_defconfig"
@@ -945,13 +940,6 @@ jobs:
           # 移除 defconfig 检查
           sed -i 's/check_defconfig//' ./common/build.config.gki
 
-      - name: 启用kpm
-        if: inputs.use_kpm
-        run: |
-          if [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ]; then
-            echo "CONFIG_KPM=y" >> "$DEFCONFIG"
-          fi
-
       # ==================== 添加 SUSFS 配置 ====================
       # 启用 SUSFS 各项隐藏功能
       - name: 添加 SUSFS 配置
@@ -1125,28 +1113,6 @@ jobs:
             echo "当前 KSU 最新提交日期: ${KSU_LATEST_COMMIT_DATE}"
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
-      # ==================== KPM 补丁 (ReSukiSU) ====================
-      # 为 ReSukiSU 应用 KPM (Kernel Patch Module) 补丁
-      - name: 应用 KPM 补丁 (ReSukiSU)
-        if: inputs.use_kpm
-        run: |
-          case "${{ inputs.android_version }}" in
-            "android12"|"android13")
-              if [ "${{ inputs.kernel_version }}" != "6.6" ]; then
-                TARGET_PATH="$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist"
-              fi
-              ;;
-            "android14"|"android15"|"android16")
-              TARGET_PATH="$KERNEL_ROOT/bazel-bin/common/kernel_aarch64/"
-              ;;
-          esac
-
-          cp -r $SUKISU_PATCHES/kpm/patch_linux "$TARGET_PATH/patch"
-          cd "$TARGET_PATH"
-          chmod 777 patch
-          ./patch
-          rm -rf Image
-          mv oImage Image
 
       # ==================== 准备 Boot 镜像 ====================
       # 复制编译产物到工作目录
