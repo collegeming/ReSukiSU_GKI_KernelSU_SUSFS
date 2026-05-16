@@ -80,6 +80,31 @@ Wiki 涵盖内容：
 
 ---
 
+## 🧪 Droidspaces 容器支持（实验性）
+
+> **实验性功能：** 不保证所有 GKI 版本均能成功构建或启动，刷入前请务必备份 Boot 镜像。
+>
+> **TIPS：** 工作流使用的是 [Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) 的 [官方补丁](https://github.com/ravindu644/Droidspaces-OSS/tree/main/Documentation/resources/kernel-patches/GKI) ，如有更好的补丁可以提个issues，此外由于存在三个补丁，或许需要反复试验以确保其中一个适配你的机型，请根据他人或实际经验来选择。
+
+[Droidspaces](https://github.com/ravindu644/Droidspaces-OSS) 是一个轻量级的 Linux 容器工具，可以在 Android 上运行完整的 Linux 环境（支持 systemd、OpenRC 等），用于搭建开发环境、运行服务器等场景。
+
+**支持范围：** 5.10 / 5.15 / 6.1 / 6.6 / 6.12
+
+**使用方式：** 在手动触发构建时，选择 `Droidspaces 容器支持` 选项：
+
+| 选项 | 说明 |
+|:---:|:---|
+| `off` | 关闭（默认） |
+| `678` | 使用 6_7_8 槽位补丁（推荐） |
+| `123` | 使用 1_2_3 槽位补丁（备用） |
+| `345` | 使用 3_4_5 槽位补丁（备用） |
+
+> **提示：** 6.12 内核仅有一个补丁，选择任意非关闭选项即可。
+
+**如果构建失败或刷入后 bootloop：** 可尝试切换到其他槽位补丁（如 678 → 123 或 345），不同内核子版本可能适用不同的补丁。
+
+---
+
 ## ❗构建失败常见原因（SukiSU / SUSFS 更新不同步）
 
 当以下两个分支的更新节奏不一致时，构建可能失败：

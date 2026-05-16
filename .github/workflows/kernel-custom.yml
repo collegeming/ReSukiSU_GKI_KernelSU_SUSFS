@@ -80,11 +80,6 @@ on:
         required: true
         type: boolean
         default: false
-      use_kpm:
-        description: "启用 KPM 功能"
-        required: true
-        type: boolean
-        default: false
       use_rekernel:
         description: "启用 Re-Kernel 驱动"
         required: false
@@ -100,6 +95,16 @@ on:
         required: false
         type: boolean
         default: false
+      droidspaces:
+        description: "Droidspaces 容器支持 (5.10~6.6: 槽位补丁, 6.12: 开/关)"
+        required: false
+        type: choice
+        options:
+          - "off"
+          - "678"
+          - "123"
+          - "345"
+        default: "off"
 
 jobs:
   build-custom-kernel:
@@ -118,10 +123,10 @@ jobs:
       build_time: ${{ inputs.build_time || '' }}
       use_zram: ${{ inputs.use_zram }}
       use_bbg: ${{ inputs.use_bbg }}
-      use_kpm: ${{ inputs.use_kpm }}
       use_rekernel: ${{ inputs.use_rekernel || false }}
       supp_op: ${{ inputs.supp_op || false }}
       enable_susfs: ${{ !inputs.cancel_susfs }}
+      droidspaces: ${{ inputs.droidspaces || 'off' }}
 
   get-ksu-manager:
     uses: ./.github/workflows/get-manager.yml
