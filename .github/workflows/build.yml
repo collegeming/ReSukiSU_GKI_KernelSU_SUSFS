@@ -567,11 +567,29 @@ jobs:
               sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs_def.h>' ./fs/proc/base.c
               sed -i '/#include <linux\/dma-buf.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP' ./fs/proc/base.c
             fi
-            # 修复 ReSukiSU: SUSFS 补丁使用 SUSFS_IS_INODE_SUS_MAP / SUSFS_IS_INODE_OPEN_REDIRECT
-            # 但缺少 #include <linux/susfs.h>，导致编译报 undeclared identifier
-            if grep -q 'SUSFS_IS_INODE_SUS_MAP\|SUSFS_IS_INODE_OPEN_REDIRECT' ./fs/proc/base.c && ! grep -qF '#include <linux/susfs.h>' ./fs/proc/base.c; then
-              if ! grep -qF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
-                sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
+
+            # Android 15 - 6.6 修复
+            if [[ "${{ inputs.android_version }}" == "android15" && "${{ inputs.kernel_version }}" == "6.6" ]]; then
+              if [[ "$CURRENT_SUB" -ge 98 ]]; then
+                cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/base.c.patch ./
+                patch -p1 < base.c.patch || true
+              fi
+              # 修复 6.6.50~6.6.97: fs/proc/base.c 头部 hunk 失配，导致 susfs_def.h 漏打
+              if grep -q 'AS_FLAGS_SUS_MAP\|susfs_is_current_proc_umounted\|SUSFS_IS_INODE_SUS_MAP\|SUSFS_IS_INODE_OPEN_REDIRECT' ./fs/proc/base.c && ! grep -qF 'susfs_def.h' ./fs/proc/base.c; then
+                if ! grep -qF '#include <linux/dma-buf.h>' ./fs/proc/base.c; then
+                  sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux\/dma-buf.h>' ./fs/proc/base.c
+                fi
+                sed -i '/#include <linux\/dma-buf.h>/a #endif' ./fs/proc/base.c
+                sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs_def.h>' ./fs/proc/base.c
+                sed -i '/#include <linux\/dma-buf.h>/a #if defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)' ./fs/proc/base.c
+              fi
+              # 修复 6.6 早期分支: memory.c 头部上下文缺少 zswap.h，导致 SUSFS 头文件 hunk 漏打
+              if grep -q 'SUSFS_IS_INODE_SUS_MAP' ./mm/memory.c && ! grep -qF '#include <linux/susfs_def.h>' ./mm/memory.c; then
+                if grep -qF '#include <linux/zswap.h>' ./mm/memory.c; then
+                  sed -i '/#include <linux\/zswap.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP\n#include <linux\/susfs_def.h>\n#endif' ./mm/memory.c
+                else
+                  sed -i '/#include <linux\/sched\/sysctl.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP\n#include <linux\/susfs_def.h>\n#endif' ./mm/memory.c
+                fi
               fi
               sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs.h>' ./fs/proc/base.c
             fi
@@ -937,7 +955,36 @@ jobs:
           CONFIG_TMPFS_POSIX_ACL=y
           EOF
 
-          # 移除 defconfig 检查
+          if [ "${{ inputs.ksu_variant }}" == "SukiSU" ] || [ "${{ inputs.ksu_variant }}" == "ReSukiSU" ] || [ "${{ inputs.ksu_variant }}" == "Next" ]; then
+            if [[ "${{ inputs.use_kpm }}" == enabled* ]] || [[ "${{ inputs.use_kpm }}" == patched* ]]; then
+              if ! grep -RqsE '^[[:space:]]*config[[:space:]]+KPM([[:space:]]|$)' common KernelSU 2>/dev/null; then
+                echo "错误: 已请求启用 KPM，但当前 KernelSU 代码未声明 CONFIG_KPM" >&2
+                exit 1
+              fi
+              echo "CONFIG_KPM=y" >> "$DEFCONFIG"
+            fi
+          fi
+
+          CURRENT_SUB="${{ inputs.sub_level }}"
+          if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
+            CURRENT_SUB=99999
+          fi
+          if [[ "${{ inputs.ksu_variant }}" == "ReSukiSU" && "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" && "$CURRENT_SUB" -ge 74 && "$CURRENT_SUB" -le 137 ]]; then
+            {
+              echo "CONFIG_KALLSYMS=y"
+              echo "CONFIG_KALLSYMS_ALL=y"
+            } >> "$DEFCONFIG"
+            # 修复 5.15.74~5.15.137: kallsyms_on_each_symbol 仅在 LIVEPATCH 下编译，导致 ReSukiSU 链接失败
+            KALLSYMS_C="./common/kernel/kallsyms.c"
+            if [ -f "$KALLSYMS_C" ] \
+              && grep -qF 'int kallsyms_on_each_symbol' "$KALLSYMS_C" \
+              && grep -qF '#endif /* CONFIG_LIVEPATCH */' "$KALLSYMS_C"; then
+              sed -i '/^#ifdef CONFIG_LIVEPATCH$/,/^int kallsyms_on_each_symbol/ { /^#ifdef CONFIG_LIVEPATCH$/d }' "$KALLSYMS_C"
+              sed -i '/^int kallsyms_on_each_symbol/,/^#endif \/\* CONFIG_LIVEPATCH \*\// { /^#endif \/\* CONFIG_LIVEPATCH \*\//d }' "$KALLSYMS_C"
+              echo "已修复 kallsyms_on_each_symbol 的 LIVEPATCH 编译限制"
+            fi
+          fi
+
           sed -i 's/check_defconfig//' ./common/build.config.gki
 
       # ==================== 添加 SUSFS 配置 ====================
