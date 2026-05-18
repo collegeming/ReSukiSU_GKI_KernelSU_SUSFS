@@ -440,15 +440,28 @@ jobs:
         run: |
           echo "应用 SUSFS 补丁..."
 
-          # 复制 SUSFS 基础文件
           cp $SUSFS4KSU/kernel_patches/50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch ./common/
           cp $SUSFS4KSU/kernel_patches/fs/* ./common/fs/
           cp $SUSFS4KSU/kernel_patches/include/linux/* ./common/include/linux/
 
-          # ReSukiSU 使用内置 SUSFS 支持
-          echo "ReSukiSU 使用内置 SUSFS 支持"
+          case "${{ inputs.ksu_variant }}" in
+            "Official")
+              cd ./KernelSU
+              cp $SUSFS4KSU/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./
+              # 兼容旧版补丁：仅当补丁仍只修改 kernel/Makefile 时，才替换为 kernel/Kbuild
+              if grep -q '^diff --git a/kernel/Makefile b/kernel/Makefile' ./10_enable_susfs_for_ksu.patch \
+                && ! grep -q '^diff --git a/kernel/Kbuild b/kernel/Kbuild' ./10_enable_susfs_for_ksu.patch; then
+                sed -i 's|kernel/Makefile|kernel/Kbuild|g' ./10_enable_susfs_for_ksu.patch
+              fi
+              patch -p1 --forward < 10_enable_susfs_for_ksu.patch || true
 
-          # 应用主 SUSFS 补丁到内核
+              cd ..
+              ;;
+            "Next"|"SukiSU"|"ReSukiSU")
+              echo "Next/SukiSU/ReSukiSU 使用内置 SUSFS 支持"
+              ;;
+          esac
+
           cd $KERNEL_ROOT/common
           CURRENT_SUB="${{ inputs.sub_level }}"
           if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
@@ -532,7 +545,6 @@ jobs:
 
           patch -p1 < 50_add_susfs_in_gki-${{ inputs.android_version }}-${{ inputs.kernel_version }}.patch || true
 
-
           # 主补丁应用后还原临时上下文，避免无关源码差异保留到最终产物
           if [[ "${{ inputs.android_version }}" == "android12" && "${{ inputs.kernel_version }}" == "5.10" ]]; then
             if [[ "$CURRENT_SUB" -le 43 ]]; then
@@ -612,7 +624,6 @@ jobs:
                 sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
               fi
             fi
-          fi
 
             # Android 13 - 5.15 修复
             if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" ]]; then
@@ -646,9 +657,6 @@ jobs:
                   sed -i '/#include "internal.h"/a \\n#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\nextern bool susfs_is_current_ksu_domain(void);\nextern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n\n#define CL_COPY_MNT_NS BIT(25)\n\n#endif' ./fs/namespace.c
                 fi
               fi
-              sed -i '/#include <linux\/dma-buf.h>/a #endif' ./fs/proc/base.c
-              sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs_def.h>' ./fs/proc/base.c
-              sed -i '/#include <linux\/dma-buf.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP' ./fs/proc/base.c
             fi
 
             # Android 15 - 6.6 修复
@@ -670,29 +678,26 @@ jobs:
                   sed -i '/#include <linux\/sched\/sysctl.h>/a #ifdef CONFIG_KSU_SUSFS_SUS_MAP\n#include <linux\/susfs_def.h>\n#endif' ./mm/memory.c
                 fi
               fi
-              sed -i '/#include <linux\/dma-buf.h>/a #include <linux\/susfs.h>' ./fs/proc/base.c
             fi
-            if [[ "$CURRENT_SUB" -le 58 ]]; then
-              cp $KERNEL_PATCHES/wild/susfs_fix_patches/v${SUSFS_VERSION}/a15-6.6/task_mmu.c.patch ./
-              patch -p1 < task_mmu.c.patch || true
-            fi
-          fi
 
-          # Android 16 - 6.12 修复
-          if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "6.12" ]]; then
-            # 修复 setuid_hook.c 重复定义: 当 CONFIG_KSU_SUSFS 启用时，
-            # 底部 #if (>=6.8 && MANUAL_HOOK) 块会产生第二个 ksu_handle_setresuid 定义
-            SETUID_HOOK="$KERNEL_ROOT/common/drivers/kernelsu/setuid_hook.c"
-            if [ -f "$SETUID_HOOK" ]; then
-              sed -i 's/defined(CONFIG_KSU_MANUAL_HOOK))/!defined(CONFIG_KSU_SUSFS) \&\& defined(CONFIG_KSU_MANUAL_HOOK))/' "$SETUID_HOOK"
-              echo "已修复 setuid_hook.c 重复定义问题"
-            fi
-            # 修复 6.12: SUSFS 补丁在 exec.c 头部 hunk 因上下文不匹配而失败
-            # 原因: 6.12 内核在 ksm.h 和 uaccess.h 之间多了一行 #include <linux/dma-buf.h>
-            # 导致 susfs_def.h 头文件注入失败, 函数体中 susfs_is_current_proc_umounted() 未声明
-            if grep -q 'susfs_is_current_proc_umounted' ./fs/exec.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/exec.c; then
-              echo "检测到 exec.c 缺少 susfs_def.h，注入声明..."
-              sed -i '/#include <linux\/ksm\.h>/a #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif' ./fs/exec.c
+            # Android 16 - 6.12 修复
+            if [[ "${{ inputs.android_version }}" == "android16" && "${{ inputs.kernel_version }}" == "6.12" ]]; then
+              # 修复 setuid_hook.c 重复定义
+              SETUID_HOOK="$KERNEL_ROOT/common/drivers/kernelsu/setuid_hook.c"
+              if [ -f "$SETUID_HOOK" ]; then
+                sed -i 's/defined(CONFIG_KSU_MANUAL_HOOK))/!defined(CONFIG_KSU_SUSFS) \&\& defined(CONFIG_KSU_MANUAL_HOOK))/' "$SETUID_HOOK"
+                echo "已修复 setuid_hook.c 重复定义问题"
+              fi
+
+              # 修复 6.12.58+: exec.c 头部上下文变化导致 SUSFS 补丁漏掉 susfs_def.h
+              if grep -q 'susfs_is_current_proc_umounted' ./fs/exec.c && ! grep -qF '#include <linux/susfs_def.h>' ./fs/exec.c; then
+                if grep -qF '#include <linux/dma-buf.h>' ./fs/exec.c; then
+                  sed -i '/#include <linux\/dma-buf.h>/a #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif' ./fs/exec.c
+                else
+                  sed -i '/#include <linux\/ksm.h>/a #ifdef CONFIG_KSU_SUSFS\n#include <linux\/susfs_def.h>\n#endif' ./fs/exec.c
+                fi
+                echo "已修复 exec.c 缺少 susfs_def.h 问题"
+              fi
             fi
           fi
 
