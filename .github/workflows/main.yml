@@ -39,9 +39,9 @@ on:
       # ==================== KernelSU 配置 ====================
       # KernelSU 变体固定为 ReSukiSU
       kernelsu_branch:
-        description: "ReSukiSU branch (main/builtin/自定义commit hash，留空使用默认)"
+        description: "ReSukiSU branch (main/dev/自定义，留空使用main)"
         type: string
-        default: ""
+        default: "main"
         required: false
 
       # ==================== 可选配置 ====================
