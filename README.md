@@ -3,7 +3,7 @@
 # GKI KernelSU SUSFS
 ### 专为ReSukiSU打造的自动构建仓库
 
-**自动化构建 GKI 内核 | 集成 KernelSU + SUSFS**
+**自动化构建 GKI 内核 | 集成 ReSukiSU + SUSFS**
 
 [![Release](https://img.shields.io/github/v/release/coolzyd9107/GKI_KernelSU_SUSFS?label=Release&style=flat-square&logo=github&logoColor=white&color=2ea44f)](https://github.com/coolzyd9107/GKI_KernelSU_SUSFS/releases)
 [![Telegram](https://img.shields.io/static/v1?label=Telegram&message=Channel&color=0088cc)](https://t.me/ReSukiSUKernelBuilds)
