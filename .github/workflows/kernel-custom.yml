@@ -69,32 +69,6 @@ on:
         type: string
         default: "Sun Dec 01 08:10:00 UTC 2024"
 
-      # ==================== 选项配置 ====================
-      use_kpm:
-        description: "KPM 功能（patched 尚不支持）"
-        required: true
-        type: choice
-        default: "disabled (关闭)"
-        options:
-          - "disabled (关闭)"
-          - "enabled (开启)"
-          - "patched (开启并修补，尚不支持)"
-      droidspaces:
-        description: "Droidspaces 容器支持 (5.10~6.6: 槽位补丁, 6.12: 开/关)"
-        required: false
-        type: choice
-        options:
-          - "off"
-          - "678"
-          - "123"
-          - "345"
-        default: "off"
-      droidspaces_ntsync:
-        description: "启用 Droidspaces 容器 NTSync 支持（需启用 Droidspaces）"
-        required: false
-        type: boolean
-        default: false
-
       # ==================== 功能开关 ====================
       use_zram:
         description: "启用 ZRAM 增强算法"
@@ -131,6 +105,11 @@ on:
           - "123"
           - "345"
         default: "off"
+      droidspaces_ntsync:
+        description: "启用 Droidspaces 容器 NTSync 支持（需启用 Droidspaces）"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-custom-kernel:
