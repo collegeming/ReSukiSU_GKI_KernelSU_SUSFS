@@ -543,6 +543,10 @@ jobs:
             gh release upload "$NEW_TAG" "$file"
           done
 
+      - name: 将发布由draft转换为publish状态
+        run: |
+          gh release edit --draft=false "$NEW_TAG"
+
       - name: 构建摘要
         run: |
           echo "## 发布已创建" >> $GITHUB_STEP_SUMMARY
