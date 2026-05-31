@@ -21,7 +21,7 @@
 
 ① 本仓库分叉自 [zzh20188/GKI_KernelSU_SUSFS](https://github.com/zzh20188/GKI_KernelSU_SUSFS/) 本人只进行了部分修改与问题修复，请各位使用者优先考虑分叉原始仓库。
 
-② 本仓库只提供ReSukiSU的预构建内核，对于其它KernelSU分支，请分叉本仓库或 [zzh20188/GKI_KernelSU_SUSFS](https://github.com/zzh20188/GKI_KernelSU_SUSFS/) 然后自行构建。
+② 本仓库仅支持构建包含ReSukiSU的内核，对其它KernelSU分支的内核构建支持现已彻底移除，如需构建包含其他KernelSU分支的内核，请分叉上游仓库 [zzh20188/GKI_KernelSU_SUSFS](https://github.com/zzh20188/GKI_KernelSU_SUSFS/) 然后自行构建。
 
 ## 💰 特别鸣谢
 
@@ -38,16 +38,6 @@
 [AlexLiuDev233](https://github.com/AlexLiuDev233): 协助修复构建工作流程存在的问题。
 
 [cctv18](https://github.com/cctv18): 协助修复构建工作流程存在的问题，为添加6.12内核构建支持提供部分思路，为修复一些SUSFS导致的问题提供思路。
-
-## 🚀 快速导航
-
-<table>
-<tr>
-<td align="center" width="33%">📖 <b><a href="https://github.com/zzh20188/GKI_KernelSU_SUSFS/wiki">文档</a></b></td>
-<td align="center" width="34%">📥 <b><a href="https://github.com/ReSukiSU-GKI/GKI_KernelSU_SUSFS/releases">下载</a></b></td>
-<td align="center" width="33%">🔰 <b><a href="https://zzh20188.github.io/GKI_KernelSU_SUSFS/guide.html">新手教程</a></b></td>
-</tr>
-</table>
 
 ---
 
