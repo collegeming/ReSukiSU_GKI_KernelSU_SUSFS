@@ -104,5 +104,5 @@
 **更多内容持续更新中...**
 
 ⭐ 如果这个项目对你有帮助，请点个 Star 支持一下！
-
+⭐ 新预构建发布通知/重大变更通知请关注我们的[Telegram频道](https://t.me/ReSukiSUKernelBuilds)
 </div>
