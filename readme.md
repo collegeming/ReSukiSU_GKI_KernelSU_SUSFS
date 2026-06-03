@@ -29,7 +29,7 @@
 
 [zzh20188](https://github.com/zzh20188)：他是本仓库的上游仓库作者。
 
-[zhuzhuzihan](https://github.com/zhuzhuzihan)：协助进行了大量修复和修改，同时为我们的Telegram Bot提供服务器(仓库所有者真的太穷了，租不起)，我们的Telegram Bot的主要开发者。
+[*zhuzhuzihan*](https://github.com/zhuzhuzihan)：协助进行了大量修复和修改，同时为我们的Telegram Bot提供服务器(仓库所有者真的太穷了，租不起)，我们的Telegram Bot的主要开发者。
 
 [TanakaLun](https://github.com/TanakaLun)：协助进行了大量修复和修改。
 
@@ -38,6 +38,8 @@
 [AlexLiuDev233](https://github.com/AlexLiuDev233): 协助修复构建工作流程存在的问题。
 
 [cctv18](https://github.com/cctv18): 协助修复构建工作流程存在的问题，为添加6.12内核构建支持提供部分思路，为修复一些SUSFS导致的问题提供思路。
+
+注: *username* 表示该协作者的github账户处于不可见状态
 
 ---
 
