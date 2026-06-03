@@ -39,7 +39,7 @@
 
 [cctv18](https://github.com/cctv18): 协助修复构建工作流程存在的问题，为添加6.12内核构建支持提供部分思路，为修复一些SUSFS导致的问题提供思路。
 
-注: *username* 表示该协作者的github账户处于不可见状态
+注:带*号的username表示该协作者的github账户处于不可见状态
 
 ---
 
