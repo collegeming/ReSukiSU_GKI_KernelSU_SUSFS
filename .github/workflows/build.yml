@@ -1336,24 +1336,24 @@ jobs:
             echo "当前 SUSFS 最新提交日期: ${SUSFS_LATEST_COMMIT_DATE}"
             echo "如果日期不同或相差过远则补丁失效、编译失败"
 
-#      # ==================== 准备 Boot 镜像 ====================
-#      # 复制编译产物到工作目录
-#      - name: 准备 Boot 镜像
-#        run: |
-#          mkdir -p bootimgs
-#
-#          if [ "${{ inputs.android_version }}" == "android12" ] || [ "${{ inputs.android_version }}" == "android13" ]; then
-#            SRC_DIR="$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist"
-#          else
-#            SRC_DIR="$KERNEL_ROOT/bazel-bin/common/kernel_aarch64"
-#          fi
-#
-#          cp "$SRC_DIR/Image" ./bootimgs/
-#          cp "$SRC_DIR/Image.lz4" ./bootimgs/
-#          cp "$SRC_DIR/Image" ./
-#          cp "$SRC_DIR/Image.lz4" ./
-#          gzip -n -k -f -9 ./Image > ./Image.gz
-#
+      # ==================== 准备 Boot 镜像 ====================
+      # 复制编译产物到工作目录
+      - name: 准备 Boot 镜像
+        run: |
+          mkdir -p bootimgs
+
+          if [ "${{ inputs.android_version }}" == "android12" ] || [ "${{ inputs.android_version }}" == "android13" ]; then
+            SRC_DIR="$KERNEL_ROOT/out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist"
+          else
+            SRC_DIR="$KERNEL_ROOT/bazel-bin/common/kernel_aarch64"
+          fi
+
+          cp "$SRC_DIR/Image" ./bootimgs/
+          cp "$SRC_DIR/Image.lz4" ./bootimgs/
+          cp "$SRC_DIR/Image" ./
+          cp "$SRC_DIR/Image.lz4" ./
+          gzip -n -k -f -9 ./Image > ./Image.gz
+
       # ==================== 创建 AnyKernel3 压缩包 ====================
       - name: 创建 AnyKernel3 压缩包
         run: |
