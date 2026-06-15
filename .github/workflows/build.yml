@@ -1308,10 +1308,6 @@ jobs:
               strings "out/${{ inputs.android_version }}-${{ inputs.kernel_version }}/dist/Image" | grep 'Linux version'
             else
               # 6.1+ 内核使用 Bazel 构建
-              
-              # 【配置 ccache 沙盒白名单】允许 Bazel 沙盒在编译时读写主机的 ccache 缓存目录
-              echo "build --sandbox_writable_path=$HOME/.ccache" >> .bazelrc
-
               # 提取 gki_defconfig 修改到 fragment，避免 bazel trim 检查失败
               FRAG="common/arch/arm64/configs/ksu.fragment"
               diff "$DEFCONFIG.orig" "$DEFCONFIG" | grep '^>' | sed 's/^> //; s/^[[:space:]]*//' > "$FRAG" || true
@@ -1329,9 +1325,7 @@ jobs:
               if [ "${{ inputs.kernel_version }}" = "6.12" ]; then
                 LTO_FLAG="--lto=none"
               fi
-              
-              # 【启用 ccache】移除了无用的 --disk_cache 参数，并追加了 --config=ccache 来调用 Kleaf 的原生 ccache 缓存机制
-              tools/bazel build --config=fast --config=ccache $LTO_FLAG $FRAG_FLAG //common:kernel_aarch64_dist || exit 1
+              tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast $LTO_FLAG $FRAG_FLAG //common:kernel_aarch64_dist || exit 1
               strings ./bazel-bin/common/kernel_aarch64/Image | grep 'Linux version'
             fi
 
