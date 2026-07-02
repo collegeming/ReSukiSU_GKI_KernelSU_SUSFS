@@ -1,4 +1,4 @@
-name: 发送 Telegram 机器人通知
+name: 发送 Telegram 机器人通知 (已弃用)
 permissions:
   contents: read
   actions: read
