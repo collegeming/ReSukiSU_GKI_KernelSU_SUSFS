@@ -1470,6 +1470,8 @@ jobs:
           fi
 
       # ==================== 上传构建产物 ====================
+      # AnyKernel3 包本身已是 zip，upload-artifact 会再套一层 zip 容器
+      # compression-level=0 关闭外层压缩，避免对已压缩的 AK3 二次压缩
       - name: 上传构建产物
         uses: actions/upload-artifact@v6
         with:
@@ -1477,7 +1479,7 @@ jobs:
           path: |
             *AnyKernel3.zip
 #            *.img
-          compression-level: 9
+          compression-level: 0
 
       # ==================== 上传补丁冲突文件 ====================
       - name: 上传补丁冲突文件
