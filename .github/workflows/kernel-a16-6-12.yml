@@ -129,7 +129,7 @@ jobs:
               | unique_by(.sub_level)[],
               { sub_level: (.lts | split(".") | .[2]), os_patch_level: "lts" }
             ]
-          ' data/android16/6.12.json)
+          ' ./data/android16/6.12.json)
           
           echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
 
