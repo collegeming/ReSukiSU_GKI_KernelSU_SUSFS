@@ -120,13 +120,9 @@ jobs:
       - name: Read and Parse 6.12.json Matrix
         id: set-matrix
         run: |
-          # 提取 entries 的 kernel 三级版本号作为 sub_level，并将 date 映射给 os_patch_level
-          # 使用 unique_by(.sub_level) 对相同的内核版本进行去重，防止并发冲突
-          # 自动读取外层的 lts 版本号，追加一条用于编译 lts 版本的规则
           MATRIX_JSON=$(jq -c '
             [
-              [ .entries[] | { sub_level: (.kernel | split(".") | .[2]), os_patch_level: .date } ] 
-              | unique_by(.sub_level)[],
+              ( .entries | map({ sub_level: (.kernel | split(".") | .[2]), os_patch_level: .date }) | unique_by(.sub_level)[] ),
               { sub_level: (.lts | split(".") | .[2]), os_patch_level: "lts" }
             ]
           ' ./data/android16/6.12.json)
@@ -140,7 +136,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 使用 ['prepare-matrix'] 语法避开中划线解析错误
         include: ${{ fromJson(needs['prepare-matrix'].outputs.matrix) }}
     uses: ./.github/workflows/build.yml
     secrets: inherit
