@@ -9,7 +9,7 @@ on:
     - cron: '0 8 * * 1'  # 每周一 UTC 8:00
   workflow_dispatch:
   push:
-    branches: [dev]
+    branches: [main]
     paths:
       - 'data/**'
       - 'web/**'
