@@ -41,6 +41,11 @@ on:
         required: false
         type: boolean
         default: false
+      cve_2026_43499_patch:
+        description: "应用 CVE-2026-43499 rtmutex 修复链"
+        required: false
+        type: boolean
+        default: true
       cancel_susfs:
         description: "禁用 SUSFS"
         required: true
@@ -87,6 +92,10 @@ on:
         required: false
         type: boolean
         default: false
+      cve_2026_43499_patch:
+        required: false
+        type: boolean
+        default: true
       cancel_susfs:
         required: false
         type: boolean
@@ -151,6 +160,7 @@ jobs:
       use_zram: false
       use_bbg: ${{ inputs.use_bbg }}
       use_rekernel: ${{ inputs.use_rekernel || false }}
+      cve_2026_43499_patch: ${{ inputs.cve_2026_43499_patch }}
       supp_op: ${{ inputs.supp_op || false }}
       enable_susfs: ${{ !inputs.cancel_susfs }}
       droidspaces: ${{ inputs.droidspaces || 'off' }}
