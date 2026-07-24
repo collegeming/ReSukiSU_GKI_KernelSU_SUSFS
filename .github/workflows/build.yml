@@ -641,12 +641,17 @@ jobs:
               if [[ "${{ inputs.os_patch_level }}" == "2024-11" ]] && grep -qF 'vm_flags_clear(new_vma, VM_PAD_MASK);' ./mm/mmap.c; then
                 sed -i 's/vm_flags_clear(new_vma, VM_PAD_MASK);/new_vma->vm_flags \&= ~VM_PAD_MASK;/' ./mm/mmap.c
               fi
-              if [[ "$CURRENT_SUB" -le 209 ]]; then
-                sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
-              fi
-            fi
+               if [[ "$CURRENT_SUB" -le 209 ]]; then
+                 sed -i -e 's/goto show_pad;/return 0;/' ./fs/proc/task_mmu.c
+               fi
+               # 修复 5.10 ≤ .209: VMA_PAD_START 宏不存在，添加兼容定义
+               if [[ "$CURRENT_SUB" -le 209 ]] && grep -q 'VMA_PAD_START' ./fs/proc/task_mmu.c && ! grep -q 'define VMA_PAD_START' ./fs/proc/task_mmu.c; then
+                 sed -i '0,/^#include /s//#ifndef VMA_PAD_START\n#define VMA_PAD_START(vma) (vma->vm_end)\n#endif\n&/' ./fs/proc/task_mmu.c
+                 echo "已为 5.10.$CURRENT_SUB 添加 VMA_PAD_START 兼容定义"
+               fi
+             fi
 
-            # Android 13 - 5.15 修复
+             # Android 13 - 5.15 修复
             if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" ]]; then
               # 修复 2024-11 分支: mmap.c 调用了 vm_flags_clear()，但同分支 mm.h 未提供 helper
               if [[ "${{ inputs.os_patch_level }}" == "2024-11" ]] && grep -qF 'vm_flags_clear(new_vma, VM_PAD_MASK);' ./mm/mmap.c; then
