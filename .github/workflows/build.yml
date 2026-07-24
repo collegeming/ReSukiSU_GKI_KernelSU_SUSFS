@@ -568,24 +568,14 @@ jobs:
           if [[ "${{ inputs.android_version }}" == "android13" && "${{ inputs.kernel_version }}" == "5.15" ]]; then
             if [[ "$CURRENT_SUB" -le 148 ]]; then
               echo "为 5.15.$CURRENT_SUB 添加 VMA_PAD_START 兼容定义"
-              cat >> include/linux/mman.h << 'EOF'
-
-#ifndef VMA_PAD_START
-#define VMA_PAD_START(vma) (vma->vm_end)
-#endif
-EOF
+              printf '\n#ifndef VMA_PAD_START\n#define VMA_PAD_START(vma) (vma->vm_end)\n#endif\n' >> include/linux/mman.h
             fi
           fi
 
           if [[ "${{ inputs.android_version }}" == "android14" && "${{ inputs.kernel_version }}" == "6.1" ]]; then
             if [[ "$CURRENT_SUB" -le 75 ]]; then
               echo "为 6.1.$CURRENT_SUB 添加 VMA_PAD_START 兼容定义"
-              cat >> include/linux/mman.h << 'EOF'
-
-#ifndef VMA_PAD_START
-#define VMA_PAD_START(vma) (vma->vm_end)
-#endif
-EOF
+              printf '\n#ifndef VMA_PAD_START\n#define VMA_PAD_START(vma) (vma->vm_end)\n#endif\n' >> include/linux/mman.h
             fi
           fi
 
