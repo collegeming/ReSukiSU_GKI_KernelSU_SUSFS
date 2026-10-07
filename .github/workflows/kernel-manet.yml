@@ -28,6 +28,7 @@ env:
   XIAOMI_BRANCH: "bsp-manet-u-oss"
   AOSP_MANIFEST_URL: "https://android.googlesource.com/kernel/manifest"
   AOSP_MANIFEST_BRANCH: "common-android14-6.1-2023-06"
+  AOSP_COMMON_URL: "https://android.googlesource.com/kernel/common"
   BAZEL_TARGET: "//msm-kernel:manet_gki_dist"
 
 permissions:
@@ -231,10 +232,11 @@ jobs:
       # 必须先同步 AOSP manifest，确保 common/build/Kleaf 就位，
       # 再克隆 Xiaomi 源码到 msm-kernel，避免 repo 项目冲突
       #
-      # 容错说明: android.googlesource.com 偶发连接失败（此前遇到过
-      # "Cannot fetch kernel/common" 导致整轮构建作废）。
-      # 因此不使用 --fail-fast，改为失败后重试整轮 sync：
-      # repo sync 是增量的，重试只会补齐缺失部分，代价很小。
+      # 已弃用分支处理: Google 会把过期的 common-<branch> 移到 deprecated/ 下。
+      # 此时 manifest 里仍写 "android14-6.1-2023-06"，但该 ref 已不存在，
+      # repo sync 会报 "Cannot fetch kernel/common" /
+      # "revision android14-6.1-2023-06 in kernel/common not found"。
+      # 处理方式与项目 build.yml 一致: 探测到废弃后改写 manifest 里的分支名。
       - name: 初始化并同步 AOSP 内核源码
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
@@ -242,6 +244,28 @@ jobs:
 
           echo "初始化 repo，分支: $AOSP_MANIFEST_BRANCH"
           $REPO init --depth=1 -u "$AOSP_MANIFEST_URL" -b "$AOSP_MANIFEST_BRANCH" --repo-rev=v2.16
+
+          # ---- 探测目标分支是否已被弃用 ----
+          # manifest 分支形如 common-android14-6.1-2023-06，
+          # 其中 common- 之后的部分才是 kernel/common 里的分支名。
+          BRANCH_TAIL="${AOSP_MANIFEST_BRANCH#common-}"
+          echo "探测 kernel/common 分支状态: $BRANCH_TAIL"
+          REMOTE_BRANCH="$(git ls-remote "$AOSP_COMMON_URL" "$BRANCH_TAIL" 2>/dev/null || true)"
+          echo "  ls-remote 结果: ${REMOTE_BRANCH:-<空>}"
+
+          if grep -q deprecated <<< "$REMOTE_BRANCH"; then
+            echo "::warning::分支已弃用，改写 manifest: $BRANCH_TAIL -> deprecated/$BRANCH_TAIL"
+            DEFAULT_MANIFEST_PATH=".repo/manifests/default.xml"
+            if [[ -f "$DEFAULT_MANIFEST_PATH" ]]; then
+              sed -i "s|\"${BRANCH_TAIL}\"|\"deprecated/${BRANCH_TAIL}\"|g" "$DEFAULT_MANIFEST_PATH"
+              grep -n "deprecated/${BRANCH_TAIL}" "$DEFAULT_MANIFEST_PATH" | head -3
+            else
+              echo "::error::未找到 $DEFAULT_MANIFEST_PATH"
+              exit 1
+            fi
+          else
+            echo "分支未弃用或无法判定，按原样同步"
+          fi
 
           MAX_ATTEMPTS=4
           for attempt in $(seq 1 $MAX_ATTEMPTS); do
@@ -255,7 +279,8 @@ jobs:
             sleep 15
           done
 
-          echo "::error::repo sync 连续 $MAX_ATTEMPTS 次失败，请检查 android.googlesource.com 可达性"
+          echo "::error::repo sync 连续 $MAX_ATTEMPTS 次失败"
+          echo "::error::请检查: 1) android.googlesource.com 可达性 2) 分支是否被弃用"
           exit 1
 
       # ==================== 克隆 Xiaomi manet 源码 ====================
