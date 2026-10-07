@@ -26,6 +26,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   XIAOMI_REPO: "https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git"
   XIAOMI_BRANCH: "bsp-manet-u-oss"
+  XIAOMI_DT_REPO: "https://github.com/MiCode/kernel_devicetree.git"
   AOSP_MANIFEST_URL: "https://android.googlesource.com/kernel/manifest"
   AOSP_MANIFEST_BRANCH: "common-android14-6.1-2023-06"
   AOSP_COMMON_URL: "https://android.googlesource.com/kernel/common"
@@ -468,6 +469,47 @@ jobs:
 
           echo "=== build/ 目录内容 ==="
           ls -la "$BUILD_PKG" | head -10
+
+          # 3) 补齐 vendor 设备树
+          # Xiaomi 内核树的 arch/arm64/boot/dts/vendor 是一个符号链接:
+          #   ../../../../../qcom/proprietary/devicetree
+          # 即指向 <工作区根>/qcom/proprietary/devicetree，该目录不在
+          # Xiaomi_Kernel_OpenSource 仓库内，而是独立的 MiCode/kernel_devicetree。
+          # 缺失时 Bazel 会报:
+          #   Label '//msm-kernel/arch/arm64/boot/dts/vendor:qcom/platform_map.bzl'
+          #   is invalid because '.../vendor' is not a package
+          DT_LINK="$KERNEL_ROOT/msm-kernel/arch/arm64/boot/dts/vendor"
+          DT_DIR="$KERNEL_ROOT/qcom/proprietary/devicetree"
+
+          if [[ -L "$DT_LINK" ]]; then
+            echo "vendor 是符号链接 -> $(readlink "$DT_LINK")"
+          else
+            echo "::warning::vendor 不是符号链接，实际类型: $(stat -c %F "$DT_LINK" 2>/dev/null || echo 未知)"
+          fi
+
+          if [[ -f "$DT_DIR/qcom/platform_map.bzl" ]]; then
+            echo "设备树已就位: $DT_DIR"
+          else
+            echo "克隆 Xiaomi 设备树 (分支: $XIAOMI_BRANCH)..."
+            rm -rf "$DT_DIR"
+            mkdir -p "$(dirname "$DT_DIR")"
+            git clone --depth 1 "$XIAOMI_DT_REPO" "$DT_DIR" -b "$XIAOMI_BRANCH"
+
+            if [[ ! -f "$DT_DIR/qcom/platform_map.bzl" ]]; then
+              echo "::error::设备树克隆后仍缺少 qcom/platform_map.bzl"
+              ls -la "$DT_DIR" | head -10
+              exit 1
+            fi
+            echo "设备树克隆完成"
+          fi
+
+          echo "=== 校验 vendor 链接可达 ==="
+          if [[ -f "$DT_LINK/qcom/platform_map.bzl" ]]; then
+            echo "OK: vendor/qcom/platform_map.bzl 可访问"
+          else
+            echo "::error::通过 vendor 链接无法访问 qcom/platform_map.bzl"
+            exit 1
+          fi
 
       # ==================== 构建内核 ====================
       # 超时策略说明:
