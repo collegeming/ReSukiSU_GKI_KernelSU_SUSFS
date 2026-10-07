@@ -1,0 +1,592 @@
+# ========================================
+# 小米 manet 内核构建工作流
+# ========================================
+# 此工作流独立于通用 build.yml，专门用于构建
+# 小米 manet (Android 14 / Linux 6.1) GKI 内核
+#
+# 工作流职责:
+#   1. 通过 AOSP kernel manifest 获取 common/build/Kleaf 依赖
+#   2. 克隆 MiCode/Xiaomi_Kernel_OpenSource (bsp-manet-u-oss) 到 msm-kernel
+#   3. 校验 Xiaomi 提交与 android/ACK_SHA (默认跟随上游最新，可锁定)
+#   4. 调用 scripts/apply_manet_patches.sh 应用补丁到 common
+#   5. 使用 Bazel 构建 //msm-kernel:manet_gki_dist
+#   6. 上传内核 dist 产物，并附带一个可直接刷入的 AnyKernel3 包
+# ========================================
+
+name: 小米 manet 内核构建
+
+# 适配 Node.js 24
+# ==================== 源码引用 ====================
+# 默认策略: 跟随上游最新
+#   - XIAOMI_COMMIT / EXPECTED_ACK_SHA 留空 => 构建时动态解析分支 HEAD 与 android/ACK_SHA
+#   - 需要复现历史构建时，在触发页面显式填入 SHA 覆盖
+# 说明: 动态解析是"取分支最新提交"，不是"每次构建结果都不同"——解析到的具体 SHA
+#       会打印在日志里，可据此复现。
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  XIAOMI_REPO: "https://github.com/MiCode/Xiaomi_Kernel_OpenSource.git"
+  XIAOMI_BRANCH: "bsp-manet-u-oss"
+  AOSP_MANIFEST_URL: "https://android.googlesource.com/kernel/manifest"
+  AOSP_MANIFEST_BRANCH: "common-android14-6.1-2023-06"
+  BAZEL_TARGET: "//msm-kernel:manet_gki_dist"
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      # ==================== 源码引用(留空=跟随最新) ====================
+      xiaomi_commit:
+        description: "Xiaomi 提交 SHA (留空=跟随 bsp-manet-u-oss 最新)"
+        required: false
+        type: string
+        default: ""
+      expected_ack_sha:
+        description: "AOSP ACK_SHA 校验值 (留空=采用 Xiaomi 源码 android/ACK_SHA)"
+        required: false
+        type: string
+        default: ""
+
+      # ==================== KernelSU 配置 ====================
+      ksu_ref:
+        description: "ReSukiSU 分支/提交 (main/builtin/自定义 commit hash)"
+        required: false
+        type: string
+        default: "main"
+
+      # ==================== Droidspaces 配置 ====================
+      droidspaces:
+        description: "Droidspaces 容器支持槽位"
+        required: false
+        type: choice
+        options:
+          - "off"
+          - "678"
+          - "123"
+          - "345"
+        default: "678"
+      droidspaces_extras:
+        description: "Droidspaces 可选配置 (USER_NS / NAT66 / UFW / Fail2ban)"
+        required: false
+        type: boolean
+        default: false
+      droidspaces_ntsync:
+        description: "启用 Droidspaces NTSync 支持 (需启用 Droidspaces)"
+        required: false
+        type: boolean
+        default: false
+
+      # ==================== 功能开关 ====================
+      enable_susfs:
+        description: "启用 SUSFS"
+        required: false
+        type: boolean
+        default: true
+      use_zram:
+        description: "启用 ZRAM LZ4 增强算法"
+        required: false
+        type: boolean
+        default: false
+      use_bbg:
+        description: "启用 BBG 防格机"
+        required: false
+        type: boolean
+        default: false
+      cve_2026_43499_patch:
+        description: "应用 CVE-2026-43499 rtmutex 修复链"
+        required: false
+        type: boolean
+        default: true
+
+      # ==================== 打包 ====================
+      build_anykernel3:
+        description: "额外产出 AnyKernel3 可刷入包"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build-manet:
+    name: "manet-android14-6.1-ReSukiSU"
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+
+    steps:
+      # ==================== 解析源码引用 ====================
+      # 留空 => 动态取分支 HEAD / 采用 Xiaomi 源码自带的 ACK_SHA
+      # 填入 => 使用指定值并校验，用于复现历史构建
+      - name: 解析源码引用
+        id: refs
+        run: |
+          set -euo pipefail
+
+          XIAOMI_COMMIT="${{ inputs.xiaomi_commit }}"
+          if [[ -z "$XIAOMI_COMMIT" ]]; then
+            echo "未指定 Xiaomi 提交，查询 $XIAOMI_BRANCH 分支 HEAD ..."
+            XIAOMI_COMMIT="$(git ls-remote "$XIAOMI_REPO" "refs/heads/$XIAOMI_BRANCH" | awk '{print $1}')"
+            [[ -n "$XIAOMI_COMMIT" ]] || { echo "::error::无法解析 $XIAOMI_BRANCH 分支 HEAD"; exit 1; }
+            echo "解析到最新提交: $XIAOMI_COMMIT"
+          else
+            echo "使用指定 Xiaomi 提交: $XIAOMI_COMMIT"
+          fi
+
+          echo "XIAOMI_COMMIT=$XIAOMI_COMMIT" >> $GITHUB_ENV
+
+          # ACK_SHA: 留空时不在这一步校验，改为克隆源码后读取其自带值再校验
+          ACK_INPUT="${{ inputs.expected_ack_sha }}"
+          if [[ -n "$ACK_INPUT" ]]; then
+            echo "期望 ACK_SHA (用户指定): $ACK_INPUT"
+          else
+            echo "未指定 ACK_SHA，将采用 Xiaomi 源码 android/ACK_SHA"
+          fi
+          echo "ACK_INPUT=$ACK_INPUT" >> $GITHUB_ENV
+
+      # ==================== 构建信息摘要 ====================
+      - name: 构建信息摘要
+        run: |
+          echo "========================================"
+          echo "    小米 manet 内核构建配置摘要"
+          echo "========================================"
+          echo "Android 版本  : android14"
+          echo "内核版本      : 6.1"
+          echo "设备          : Xiaomi manet"
+          echo "Xiaomi 分支   : $XIAOMI_BRANCH"
+          echo "Xiaomi 提交   : $XIAOMI_COMMIT"
+          echo "ACK 校验      : ${ACK_INPUT:-<采用 Xiaomi 源码自带值>}"
+          echo "KSU 分支      : ${{ inputs.ksu_ref }}"
+          echo "SUSFS         : ${{ inputs.enable_susfs }}"
+          echo "Droidspaces   : ${{ inputs.droidspaces }}"
+          echo "DS 可选配置   : ${{ inputs.droidspaces_extras }}"
+          echo "NTSync        : ${{ inputs.droidspaces_ntsync }}"
+          echo "ZRAM          : ${{ inputs.use_zram }}"
+          echo "BBG           : ${{ inputs.use_bbg }}"
+          echo "CVE-2026-43499: ${{ inputs.cve_2026_43499_patch }}"
+          echo "AnyKernel3    : ${{ inputs.build_anykernel3 }}"
+          echo "Bazel 目标    : $BAZEL_TARGET"
+          echo "========================================"
+
+      # ==================== 清理磁盘空间 ====================
+      - name: 清理磁盘空间
+        uses: endersonmenezes/free-disk-space@v3
+        with:
+          remove_android: true
+          remove_dotnet: true
+          remove_haskell: true
+          remove_tool_cache: true
+          remove_swap: true
+          remove_packages: "azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable firefox postgresql* temurin-* *llvm* mysql* dotnet-sdk-*"
+          remove_packages_one_command: true
+          remove_folders: "/usr/share/swift /usr/share/miniconda /usr/share/az* /usr/local/lib/node_modules /usr/local/share/chromium /usr/local/share/powershell /usr/local/julia /usr/local/aws-cli /usr/local/aws-sam-cli /usr/share/gradle"
+          rm_cmd: "rmz"
+          rmz_version: "3.1.1"
+          testing: false
+
+      # ==================== 检出仓库代码 ====================
+      - name: 检出代码仓库
+        uses: actions/checkout@v6
+
+      # ==================== 安装编译依赖 ====================
+      - name: 安装编译依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ccache python3 git curl build-essential libssl-dev bison flex libelf-dev dwarves wget
+
+      # ==================== 配置 ccache ====================
+      - name: 配置 ccache
+        run: |
+          mkdir -p ~/.cache/bazel
+          ccache --version
+          ccache --max-size=2G
+          ccache --set-config=compression=true
+          echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
+
+      # ==================== 恢复 ccache 缓存 ====================
+      - name: 恢复 ccache 缓存
+        uses: actions/cache@v5
+        with:
+          path: ~/.ccache
+          key: manet-android14-6.1-ccache-${{ github.sha }}
+          restore-keys: |
+            manet-android14-6.1-ccache-
+
+      # ==================== 缓存 Bazel 磁盘缓存 ====================
+      - name: 缓存 Bazel 磁盘缓存
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/bazel
+          key: manet-bazel-${{ github.sha }}
+          restore-keys: |
+            manet-bazel-
+
+      # ==================== 配置 Git ====================
+      - name: 配置 Git
+        run: |
+          git config --global user.name "BuildBot"
+          git config --global user.email "BuildGkiKernel@gmail.com"
+
+      # ==================== 初始化构建环境 ====================
+      - name: 初始化构建环境
+        run: |
+          KERNEL_ROOT="$GITHUB_WORKSPACE/kernel_workspace"
+          mkdir -p "$KERNEL_ROOT"
+
+          cat >> $GITHUB_ENV << EOF
+          KERNEL_ROOT=$KERNEL_ROOT
+          EOF
+
+          # 下载并配置 repo 工具
+          mkdir -p "$GITHUB_WORKSPACE/git-repo"
+          curl -L https://storage.googleapis.com/git-repo-downloads/repo -o "$GITHUB_WORKSPACE/git-repo/repo"
+          chmod 0755 "$GITHUB_WORKSPACE/git-repo/repo"
+          echo "$GITHUB_WORKSPACE/git-repo" >> "$GITHUB_PATH"
+          echo "REPO=$GITHUB_WORKSPACE/git-repo/repo" >> $GITHUB_ENV
+
+      # ==================== 初始化并同步 AOSP 内核源码 ====================
+      # 必须先同步 AOSP manifest，确保 common/build/Kleaf 就位，
+      # 再克隆 Xiaomi 源码到 msm-kernel，避免 repo 项目冲突
+      - name: 初始化并同步 AOSP 内核源码
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          echo "初始化 repo，分支: $AOSP_MANIFEST_BRANCH"
+          $REPO init --depth=1 -u "$AOSP_MANIFEST_URL" -b "$AOSP_MANIFEST_BRANCH" --repo-rev=v2.16
+
+          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
+          echo "AOSP common 同步完成 (HEAD 由 manifest 决定，稍后按 ACK_SHA 校准)"
+
+      # ==================== 克隆 Xiaomi manet 源码 ====================
+      # AOSP manifest 不包含 msm-kernel 项目，直接克隆 Xiaomi 源码到该目录
+      - name: 克隆 Xiaomi manet 源码
+        run: |
+          # 若 repo sync 意外创建了 msm-kernel 目录，先清除避免冲突
+          if [[ -e "$KERNEL_ROOT/msm-kernel" ]]; then
+            echo "::warning::msm-kernel 已存在，移除后重新克隆"
+            rm -rf "$KERNEL_ROOT/msm-kernel"
+          fi
+
+          echo "克隆 Xiaomi manet 源码 (分支: $XIAOMI_BRANCH)..."
+          git clone --depth 1 "$XIAOMI_REPO" "$KERNEL_ROOT/msm-kernel" -b "$XIAOMI_BRANCH"
+
+          # 获取固定提交
+          git -C "$KERNEL_ROOT/msm-kernel" fetch origin "$XIAOMI_COMMIT" --depth=1
+          git -C "$KERNEL_ROOT/msm-kernel" checkout "$XIAOMI_COMMIT"
+
+          # 校验 Xiaomi 提交
+          ACTUAL_COMMIT="$(git -C "$KERNEL_ROOT/msm-kernel" rev-parse HEAD)"
+          if [[ "$ACTUAL_COMMIT" != "$XIAOMI_COMMIT" ]]; then
+            echo "::error::Xiaomi 提交校验失败: 期望 $XIAOMI_COMMIT, 实际 $ACTUAL_COMMIT"
+            exit 1
+          fi
+          echo "Xiaomi 提交校验通过: $ACTUAL_COMMIT"
+          git -C "$KERNEL_ROOT/msm-kernel" log -1 --format='提交日期: %ci%n提交信息: %s'
+
+      # ==================== 校准 AOSP common 到 Xiaomi 期望的 ACK 基线 ====================
+      # Xiaomi 源码的 android/ACK_SHA 指明它期望编译在哪个 AOSP common 提交上。
+      # 默认采用该值(上游最新)；用户显式指定时以用户值为准。
+      - name: 校准 AOSP common 到 ACK 基线
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          set -euo pipefail
+
+          ACK_SHA_FILE="$KERNEL_ROOT/msm-kernel/android/ACK_SHA"
+          if [[ ! -f "$ACK_SHA_FILE" ]]; then
+            echo "::error::ACK_SHA 文件不存在: $ACK_SHA_FILE"
+            exit 1
+          fi
+
+          XIAOMI_ACK="$(tr -d '[:space:]' < "$ACK_SHA_FILE")"
+          echo "Xiaomi 源码期望的 ACK_SHA: $XIAOMI_ACK"
+
+          if [[ -n "${ACK_INPUT:-}" ]]; then
+            TARGET_ACK="$ACK_INPUT"
+            echo "采用用户指定的 ACK_SHA: $TARGET_ACK"
+          else
+            TARGET_ACK="$XIAOMI_ACK"
+            echo "采用 Xiaomi 源码自带的 ACK_SHA: $TARGET_ACK"
+          fi
+
+          if [[ "$XIAOMI_ACK" != "$TARGET_ACK" ]]; then
+            echo "::warning::目标 ACK_SHA 与 Xiaomi 源码期望值不一致"
+            echo "::warning::  源码期望: $XIAOMI_ACK"
+            echo "::warning::  实际使用: $TARGET_ACK"
+            echo "::warning::  偏离该基线可能导致厂商模块不兼容或编译失败"
+          fi
+
+          COMMON_REMOTE="$(git remote | head -n 1)"
+          [[ -n "$COMMON_REMOTE" ]] || { echo "::error::common 没有可用 Git remote"; exit 1; }
+
+          echo "拉取并切换 common 到: $TARGET_ACK"
+          git fetch "$COMMON_REMOTE" "$TARGET_ACK" --depth=1
+          git checkout "$TARGET_ACK"
+
+          ACTUAL_COMMON_SHA="$(git rev-parse HEAD)"
+          if [[ "$ACTUAL_COMMON_SHA" != "$TARGET_ACK" ]]; then
+            echo "::error::common 切换失败: 期望 $TARGET_ACK, 实际 $ACTUAL_COMMON_SHA"
+            exit 1
+          fi
+          echo "common 已切换到: $ACTUAL_COMMON_SHA"
+          git log -1 --format='提交日期: %ci%n提交信息: %s'
+          echo "COMMON_SHA=$ACTUAL_COMMON_SHA" >> $GITHUB_ENV
+
+      # ==================== 应用补丁 ====================
+      - name: 应用 manet 补丁
+        working-directory: ${{ env.KERNEL_ROOT }}
+        run: |
+          SCRIPT="$GITHUB_WORKSPACE/scripts/apply_manet_patches.sh"
+
+          ARGS=(
+            --workspace "$KERNEL_ROOT"
+            --droidspaces "${{ inputs.droidspaces }}"
+            --ksu-ref "${{ inputs.ksu_ref }}"
+          )
+
+          if [[ "${{ inputs.enable_susfs }}" == "true" ]]; then
+            ARGS+=(--enable-susfs)
+          else
+            ARGS+=(--disable-susfs)
+          fi
+
+          if [[ "${{ inputs.droidspaces_extras }}" == "true" ]]; then
+            ARGS+=(--droidspaces-extras)
+          fi
+
+          if [[ "${{ inputs.droidspaces_ntsync }}" == "true" ]]; then
+            ARGS+=(--ntsync)
+          fi
+
+          if [[ "${{ inputs.cve_2026_43499_patch }}" == "true" ]]; then
+            ARGS+=(--cve)
+          fi
+
+          if [[ "${{ inputs.use_zram }}" == "true" ]]; then
+            ARGS+=(--use-zram)
+          fi
+
+          if [[ "${{ inputs.use_bbg }}" == "true" ]]; then
+            ARGS+=(--use-bbg)
+          fi
+
+          echo "执行: bash $SCRIPT ${ARGS[*]}"
+          bash "$SCRIPT" "${ARGS[@]}"
+
+      # ==================== 收集补丁冲突文件 ====================
+      - name: 收集补丁冲突文件
+        if: always()
+        run: |
+          REJECTS_DIR="$GITHUB_WORKSPACE/patch-rejects"
+          mkdir -p "$REJECTS_DIR"
+
+          mapfile -t REJS < <(find "$KERNEL_ROOT" -type f -name '*.rej' 2>/dev/null || true)
+          REJ_COUNT=${#REJS[@]}
+          echo "发现 $REJ_COUNT 个 .rej 文件"
+          echo "REJ_COUNT=$REJ_COUNT" >> $GITHUB_ENV
+
+          if [ "$REJ_COUNT" -gt 0 ]; then
+            for REJ in "${REJS[@]}"; do
+              REL="${REJ#"$KERNEL_ROOT"/}"
+              DEST="$REJECTS_DIR/$REL"
+              mkdir -p "$(dirname "$DEST")"
+              cp "$REJ" "$DEST"
+
+              ORIG="${REJ%.rej}"
+              if [ -f "$ORIG" ]; then
+                cp "$ORIG" "${DEST%.rej}"
+              fi
+              echo "$REL" >> "$REJECTS_DIR/index.txt"
+            done
+          fi
+
+      # ==================== 构建内核 ====================
+      # 超时策略说明:
+      #   作业级 timeout-minutes 是硬上限，超出会被 GitHub 直接取消（失败），
+      #   已产出的中间物与 upload-artifact 步骤都不会执行 —— 即本次构建白跑。
+      #   因此作业级给足余量(240)，构建步骤自身设 100 分钟并在超时后重试：
+      #   重试时 ccache 与 Bazel 磁盘缓存已是热的，通常能显著缩短。
+      - name: 构建 manet GKI 内核
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 100
+          max_attempts: 2
+          retry_on: timeout
+          command: |
+            set -ex
+            cd "$KERNEL_ROOT"
+
+            # Xiaomi 官方脚本先构建，再运行 *_dist 目标导出 dist 目录。
+            # fragment 文件由补丁脚本生成在 common/arch/arm64/configs/ksu.fragment。
+            FRAG_FLAG=""
+            FRAG="common/arch/arm64/configs/ksu.fragment"
+            if [[ -s "$FRAG" ]]; then
+              FRAG_FLAG="--defconfig_fragment=//common:arch/arm64/configs/ksu.fragment"
+            fi
+
+            echo "=== Fragment 内容 ==="
+            cat "$FRAG"
+            echo "======================"
+
+            python3 msm-kernel/build_with_bazel.py \
+              -t manet gki \
+              --disk_cache="$HOME/.cache/bazel" \
+              --config=fast \
+              --lto=thin \
+              $FRAG_FLAG
+
+            # 官方脚本将导出产物放入 out/msm-kernel-manet-gki/dist。
+            DIST_DIR="$KERNEL_ROOT/out/msm-kernel-manet-gki/dist"
+            if [[ ! -d "$DIST_DIR" ]]; then
+              echo "::error::dist 目录不存在: $DIST_DIR"
+              exit 1
+            fi
+
+            echo "=== dist 目录内容 ==="
+            ls -la "$DIST_DIR/"
+            IMAGE_FILE="$(find "$DIST_DIR" -type f \( -name 'Image' -o -name 'Image.gz' -o -name 'Image.lz4' \) -print -quit)"
+            if [[ -z "$IMAGE_FILE" ]]; then
+              echo "::error::dist 目录中未找到内核镜像"
+              exit 1
+            fi
+            echo "找到内核镜像: $IMAGE_FILE"
+            strings "$IMAGE_FILE" | grep 'Linux version'
+
+      # ==================== 打包 dist 产物 ====================
+      - name: 打包 dist 产物
+        run: |
+          DIST_DIR="$KERNEL_ROOT/out/msm-kernel-manet-gki/dist"
+          if [[ ! -d "$DIST_DIR" ]]; then
+            echo "::error::dist 目录不存在: $DIST_DIR"
+            exit 1
+          fi
+
+          ARCHIVE_NAME="manet-gki-kernel-dist-$(date -u +%Y%m%d-%H%M%S).tar.gz"
+          echo "打包 dist 产物: $ARCHIVE_NAME"
+          tar -czf "$GITHUB_WORKSPACE/$ARCHIVE_NAME" -C "$DIST_DIR" .
+          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
+
+          # 显示产物大小
+          ls -lh "$GITHUB_WORKSPACE/$ARCHIVE_NAME"
+
+      # ==================== 制作 AnyKernel3 可刷入包 ====================
+      # 只替换 boot 分区里的内核镜像，不动 ramdisk/dtb/数据。
+      # manet 的 ramdisk 位于 init_boot 分区，故 AK3 无需处理 ramdisk。
+      - name: 制作 AnyKernel3 可刷入包
+        if: ${{ inputs.build_anykernel3 }}
+        run: |
+          set -euo pipefail
+
+          DIST_DIR="$KERNEL_ROOT/out/msm-kernel-manet-gki/dist"
+          IMAGE_FILE="$(find "$DIST_DIR" -type f \( -name 'Image' -o -name 'Image.gz' -o -name 'Image.lz4' \) -print -quit)"
+          if [[ -z "$IMAGE_FILE" ]]; then
+            echo "::error::dist 目录中未找到内核镜像，无法制作 AnyKernel3"
+            exit 1
+          fi
+          echo "使用内核镜像: $IMAGE_FILE"
+
+          # AnyKernel3 官方模板(osm0sis)。ReSukiSU-GKI/AnyKernel3 已不可访问，
+          # 改用上游模板自行配置设备参数。
+          git clone --depth 1 https://github.com/osm0sis/AnyKernel3.git "$GITHUB_WORKSPACE/AnyKernel3"
+          rm -rf "$GITHUB_WORKSPACE/AnyKernel3/.git"
+          rm -rf "$GITHUB_WORKSPACE/AnyKernel3/.github"
+
+          AK3="$GITHUB_WORKSPACE/AnyKernel3"
+
+          # 写入 manet 专用配置
+          # block=boot            -> 内核在 boot 分区(ramdisk 在 init_boot，AK3 不处理)
+          # do.devicecheck=1      -> 防止刷到别的机型
+          # no_magisk_check=1     -> 允许在已 root 环境刷入
+          cat > "$AK3/anykernel.sh" <<'AK3EOF'
+          ### AnyKernel3 Ramdisk Mod Script
+          ## osm0sis @ xda-developers
+
+          ### AnyKernel setup
+          # global properties
+          properties() { '
+          kernel.string=manet GKI (ReSukiSU + SUSFS + Droidspaces)
+          do.devicecheck=1
+          do.modules=0
+          do.systemless=0
+          do.cleanup=1
+          do.cleanuponabort=0
+          do.check_boot_version=0
+          device.name1=manet
+          device.name2=
+          device.name3=
+          device.name4=
+          device.name5=
+          supported.versions=
+          supported.patchlevels=
+          supported.vendorpatchlevels=
+          '; } # end properties
+
+          ### AnyKernel install
+          ## boot shell variables
+          block=boot
+          is_slot_device=auto
+          ramdisk_compression=auto
+          patch_vbmeta_flag=auto
+          no_magisk_check=1
+
+          # import functions/variables and setup patching - see for reference (DO NOT REMOVE)
+          . tools/ak3-core.sh
+
+          # manet 的 ramdisk 在 init_boot 分区，boot 分区只有内核。
+          # 无 ramdisk 时走 flash_boot，有则走 unpack_ramdisk + write_boot
+          # （与社区已验证的 GKI 内核包写法一致）
+          split_boot
+
+          if [ -f "$SPLITIMG/ramdisk.cpio" ]; then
+            unpack_ramdisk
+            write_boot
+          else
+            flash_boot
+          fi
+          AK3EOF
+
+          # heredoc 内容带有 YAML 缩进，需去掉行首空格还原为合法 shell
+          sed -i 's/^          //' "$AK3/anykernel.sh"
+          echo "=== anykernel.sh 语法检查 ==="
+          bash -n "$AK3/anykernel.sh" && echo "OK"
+          grep -n "device.name1\|block=\|do.devicecheck" "$AK3/anykernel.sh"
+
+          cp "$IMAGE_FILE" "$AK3/Image"
+
+          ZIP_NAME="manet-AnyKernel3-$(date -u +%Y%m%d-%H%M%S).zip"
+          ( cd "$AK3" && zip -r9 "$GITHUB_WORKSPACE/$ZIP_NAME" ./* -x '*.git*' )
+          echo "AK3_ZIP=$ZIP_NAME" >> $GITHUB_ENV
+
+          echo "=== AnyKernel3 包内容 ==="
+          unzip -l "$GITHUB_WORKSPACE/$ZIP_NAME" | head -25
+          ls -lh "$GITHUB_WORKSPACE/$ZIP_NAME"
+
+      # ==================== 上传 AnyKernel3 包 ====================
+      - name: 上传 AnyKernel3 包
+        if: ${{ inputs.build_anykernel3 }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: manet-AnyKernel3
+          path: ${{ env.AK3_ZIP }}
+          compression-level: 0
+          if-no-files-found: error
+
+      # ==================== 上传内核产物 ====================
+      - name: 上传内核 dist 产物
+        uses: actions/upload-artifact@v6
+        with:
+          name: manet-gki-kernel-dist
+          path: ${{ env.ARCHIVE_NAME }}
+          compression-level: 0
+          if-no-files-found: error
+
+      # ==================== 上传补丁冲突文件 ====================
+      - name: 上传补丁冲突文件
+        if: always() && env.REJ_COUNT > 0
+        uses: actions/upload-artifact@v6
+        with:
+          name: manet-gki-kernel-rejects
+          path: patch-rejects/
+          if-no-files-found: ignore
+          compression-level: 9
