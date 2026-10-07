@@ -572,10 +572,16 @@ jobs:
           # Xiaomi 树引用了若干未随开源代码发布的目录，Kconfig 的 source 指令
           # 遇到不存在的文件会直接报错终止（不是警告），例如：
           #   drivers/misc/Kconfig:540: can't open file "drivers/misc/hwid/Kconfig"
-          # 对应 modules.list.msm.manet 里的 hwid.ko 也未开源。
-          # 处理方式: 把指向不存在文件的 source 行注释掉，该模块自然不参与构建。
-          # 注意: 需要同时扫描 common/(GKI 主体) 与 msm-kernel/(小米平台层)，
-          #       本例中的 hwid 属于后者。
+          # 该模块在树里还有两处配套引用，必须一并清理，否则 Kleaf 的
+          # defconfig fragment 校验会失败：
+          #   arch/arm64/configs/vendor/manet_GKI.config: CONFIG_MI_HARDWARE_ID=m
+          #     -> ERROR! Defconfig fragment did not apply as expected
+          #        -MI_HARDWARE_ID m
+          #   modules.list.msm.manet: hwid.ko
+          #     -> 模块列表要求产出该 .ko，但源码不存在
+          # 处理策略: 对每个「目录缺失的 source 行」，推导其所属 CONFIG 符号
+          # （从同级 Makefile 的 obj-$(CONFIG_X) += 目录/ 得到），
+          # 再移除各 vendor config 中的该符号与 modules.list 中的该 .ko。
           COMMON_DIR="$KERNEL_ROOT/common"
           echo "=== 扫描缺失的 Kconfig source 引用 ==="
           total_fixed=0
@@ -599,17 +605,55 @@ jobs:
               done < <(sed -n 's/^[[:space:]]*source "\([^"]*\)".*$/\1/p' "$kfile" 2>/dev/null || true)
 
               for rel in $rel_found; do
+                # 目录名（如 hwid）与 Makefile 所在目录
+                mod_dir="$(basename "$(dirname "$rel")")"
+                mod_name="$(basename "$rel")"
+                [[ "$mod_name" == "Kconfig" ]] || { mod_name="$mod_dir"; }
+                kdir="$(dirname "$kfile")"
+
+                echo "  [$(echo "$kfile" | sed "s|$TREE/||")] 缺失 source: $rel (模块 $mod_name)"
+
+                # (a) 注释 Kconfig source 行
                 sed -i "s|^[[:space:]]*source \"${rel}\"[[:space:]]*\$|# &  # disabled: not published in OSS tree|" "$kfile"
-                echo "  [$(echo "$kfile" | sed "s|$TREE/||")] 注释缺失 source: $rel"
                 total_fixed=$((total_fixed+1))
+
+                # (b) 从同级 Makefile 推导 CONFIG 符号
+                mfile="$kdir/Makefile"
+                sym=""
+                if [[ -f "$mfile" ]]; then
+                  sym="$(sed -n "s/^[[:space:]]*obj-\$(\(CONFIG_[A-Z0-9_]*\))[]:= ]*.*${mod_name}\/.*$/\1/p" "$mfile" | head -1)"
+                fi
+                if [[ -n "$sym" ]]; then
+                  echo "      对应符号: $sym —— 从各 vendor config 中移除"
+                  mapfile -t cfgs < <(find "$TREE/arch/arm64/configs" -name '*.config' -type f 2>/dev/null || true)
+                  for cfg in "${cfgs[@]}"; do
+                    if grep -qE "^#?[[:space:]]*${sym}[= ]" "$cfg" 2>/dev/null; then
+                      sed -i -E "s|^#?[[:space:]]*${sym}=.*$|# ${sym} is not set  # disabled: source not published|" "$cfg"
+                      echo "      已清理 $(echo "$cfg" | sed "s|$TREE/||")"
+                    fi
+                  done
+                else
+                  echo "      ::warning::未能从 Makefile 推导 CONFIG 符号"
+                fi
+
+                # (c) 从 modules.list* 移除该模块的 .ko
+                mapfile -t mlist < <(find "$TREE" -maxdepth 1 -name 'modules.list*' -type f 2>/dev/null || true)
+                for ml in "${mlist[@]}"; do
+                  if grep -qE "^[[:space:]]*${mod_name}\.ko[[:space:]]*$" "$ml" 2>/dev/null; then
+                    sed -i -E "/^[[:space:]]*${mod_name}\.ko[[:space:]]*$/d" "$ml"
+                    echo "      已从 $(basename "$ml") 移除 ${mod_name}.ko"
+                  fi
+                done
               done
             done < <(find "$TREE" -name Kconfig -type f 2>/dev/null)
           done
 
-          echo "全树共注释 $total_fixed 个缺失的 Kconfig source 引用"
+          echo "全树共处理 $total_fixed 处缺失的 Kconfig source 引用"
           if [[ "$total_fixed" -gt 0 ]]; then
-            echo "--- 复查 hwid 引用 ---"
-            grep -rn "hwid/Kconfig" "$COMMON_DIR" "$KERNEL_ROOT/msm-kernel" 2>/dev/null | head -3 || echo "  已无未注释的 hwid 引用"
+            echo "--- 复查 ---"
+            echo "[Kconfig] $(grep -rn "hwid/Kconfig" "$COMMON_DIR" "$KERNEL_ROOT/msm-kernel" 2>/dev/null | head -2 || echo '无')"
+            echo "[config  ] $(grep -rn "MI_HARDWARE_ID=" "$COMMON_DIR" "$KERNEL_ROOT/msm-kernel" 2>/dev/null | head -3 || echo '无')"
+            echo "[modules ] $(grep -rn '^hwid\.ko' "$COMMON_DIR" "$KERNEL_ROOT/msm-kernel" 2>/dev/null | head -2 || echo '无')"
           fi
 
       # ==================== 构建内核 ====================
