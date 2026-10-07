@@ -268,6 +268,30 @@ if $SUSFS; then
   cp -r "$susfs_fs_dir/"* ./fs/
   cp -r "$susfs_inc_dir/"* ./include/linux/
 
+  # ---------- SUSFS 补丁的前置兼容处理 ----------
+  # SUSFS 主补丁是针对较新 AOSP common 编写的，其 fs/proc/base.c 的 hunk#1
+  # 上下文要求 include 区存在 "#include <linux/dma-buf.h>"。
+  # Xiaomi ACK 基线(ACK_SHA)下的 base.c 没有这一行（该 include 是后续
+  # AOSP 提交才加的），导致 hunk#1 无法定位、整块补丁 dry-run 失败。
+  # 这里按需补齐该 include，使补丁上下文成立；若已存在则不做任何改动。
+  base_c="fs/proc/base.c"
+  if [[ -f "$base_c" ]]; then
+    if ! grep -q '#include <linux/dma-buf.h>' "$base_c"; then
+      log "base.c 缺少 dma-buf.h include，按 SUSFS 补丁上下文补齐"
+      if grep -q '#include <linux/cpufreq_times.h>' "$base_c"; then
+        sed -i '/#include <linux\/cpufreq_times.h>/a #include <linux/dma-buf.h>' "$base_c"
+      else
+        # 退路: cpufreq_times.h 也不在时，插到 trace/events/oom.h 之前
+        sed -i '0,/#include <trace\/events\/oom.h>/s//#include <linux\/dma-buf.h>\n#include <trace\/events\/oom.h>/' "$base_c"
+      fi
+      grep -n 'dma-buf.h' "$base_c" | head -3
+    else
+      log "base.c 已含 dma-buf.h include，跳过兼容处理"
+    fi
+  else
+    warn "未找到 $base_c，跳过 SUSFS 前置兼容处理"
+  fi
+
   # 应用 SUSFS 主补丁 (必需)
   apply_required_patch "50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch" 1
 
