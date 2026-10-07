@@ -425,6 +425,50 @@ jobs:
             done
           fi
 
+      # ==================== 准备 Bazel 工作区 ====================
+      # Qualcomm 的 Bazel 构建要求工作区根目录存在 build/ 包，
+      # msm-kernel/msm_platforms.bzl 里 load("//build:msm_kernel_extensions.bzl")
+      # 依赖它。AOSP 的 kernel/build 仓库只在根级放 msm_kernel_extensions.bzl，
+      # 不一定带 BUILD 文件，缺少时 Bazel 会报:
+      #   Every .bzl file must have a corresponding package, but
+      #   '//build:msm_kernel_extensions.bzl' does not have one.
+      # reposync 出来的 kernel/build 目录通常没有 BUILD.bazel，这里补齐。
+      - name: 准备 Bazel 工作区
+        run: |
+          set -euo pipefail
+
+          BUILD_PKG="$KERNEL_ROOT/build"
+          if [[ ! -d "$BUILD_PKG" ]]; then
+            echo "::warning::$BUILD_PKG 不存在，创建空目录并补齐所需扩展文件"
+            mkdir -p "$BUILD_PKG"
+          fi
+
+          # 1) 确保 build/ 是合法的 Bazel 包
+          if [[ ! -f "$BUILD_PKG/BUILD.bazel" && ! -f "$BUILD_PKG/BUILD" ]]; then
+            echo "build/ 缺少 BUILD 文件，创建空的 BUILD.bazel"
+            : > "$BUILD_PKG/BUILD.bazel"
+          else
+            echo "build/ 已有 BUILD 文件"
+          fi
+
+          # 2) 确保 msm_kernel_extensions.bzl 存在
+          EXT="$BUILD_PKG/msm_kernel_extensions.bzl"
+          if [[ ! -e "$EXT" ]]; then
+            SRC="$KERNEL_ROOT/msm-kernel/msm_kernel_extensions.bzl"
+            if [[ -f "$SRC" ]]; then
+              echo "从 msm-kernel 复制 msm_kernel_extensions.bzl"
+              cp "$SRC" "$EXT"
+            else
+              echo "::error::找不到 msm_kernel_extensions.bzl 源文件: $SRC"
+              exit 1
+            fi
+          else
+            echo "msm_kernel_extensions.bzl 已存在"
+          fi
+
+          echo "=== build/ 目录内容 ==="
+          ls -la "$BUILD_PKG" | head -10
+
       # ==================== 构建内核 ====================
       # 超时策略说明:
       #   作业级 timeout-minutes 是硬上限，超出会被 GitHub 直接取消（失败），
