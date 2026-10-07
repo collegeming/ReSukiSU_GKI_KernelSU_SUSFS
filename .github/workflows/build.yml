@@ -854,6 +854,13 @@ jobs:
           enable_config CONFIG_PID_NS
           enable_config CONFIG_DEVTMPFS
 
+          # 可选: 用户命名空间
+          # Droidspaces 官方列为 "optional but recommended"：修复容器内跑
+          # Docker/Podman 时的 unsafe procfs 报错，并提供 rootless 支持。
+          # 与 CFS_BANDWIDTH / CGROUP_PIDS 不同，它不改变调度器或 cgroup
+          # 结构布局，不影响厂商模块加载。
+          enable_config_if_defined CONFIG_USER_NS
+
           # 可选: 网络相关配置 (Docker/NAT 模式)
           enable_config_if_defined CONFIG_NETFILTER_XT_MATCH_ADDRTYPE
           enable_config_if_defined CONFIG_NETFILTER_XT_TARGET_LOG
@@ -885,9 +892,8 @@ jobs:
           }
 
           if [[ "${{ inputs.android_version }}" == "android15" && "${{ inputs.kernel_version }}" == "6.6" ]]; then
-            # 1. 开启用户命名空间（必须）
-            # enable_config_if_defined CONFIG_USER_NS
-            # 2. 关闭安卓严格网络控制（必须）
+            # 关闭安卓严格网络控制（必须，仅 6.6 分支需要）
+            # CONFIG_USER_NS 已在上方对全部内核版本统一启用
             disable_config CONFIG_ANDROID_PARANOID_NETWORK
           fi
 
