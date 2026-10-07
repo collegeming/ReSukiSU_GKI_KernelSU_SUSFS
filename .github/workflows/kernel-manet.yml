@@ -511,16 +511,46 @@ jobs:
             exit 1
           fi
 
-          # 4) 校验 bazel wrapper（build_with_bazel.py 从 tools/bazel 调用）
-          if [[ ! -x "$KERNEL_ROOT/tools/bazel" ]]; then
-            if [[ -f "$KERNEL_ROOT/tools/bazel" ]]; then
-              chmod +x "$KERNEL_ROOT/tools/bazel"
-              echo "已补上 tools/bazel 可执行位"
+          # 5) 放宽 Kleaf 内部 .bzl 的加载可见性
+          # Xiaomi 树 msm-kernel/*.bzl 会 load Kleaf 内部实现文件，例如
+          #   load("//build/kernel/kleaf/impl:image/image_utils.bzl", ...)
+          # 较新的 Kleaf 给这些文件加了
+          #   visibility("//build/kernel/kleaf/...")
+          # 于是从 //msm-kernel 加载被拒:
+          #   Starlark file ... is not visible for loading from package //msm-kernel
+          #
+          # 为什么不能只靠命令行参数：
+          #   该检查在 `bazel query` 阶段就会触发，而 build_with_bazel.py 先跑
+          #   query 再跑 build；query 不接收 --check_bzl_visibility（那是
+          #   build 参数），因此仅靠传参无法绕过。这里直接放宽声明。
+          # 影响范围: 仅 Starlark 加载权限，不改变任何编译产物。
+          BUILD_DIR="$KERNEL_ROOT/build"
+          if [[ -d "$BUILD_DIR" ]]; then
+            mapfile -t VFILES < <(grep -rl 'visibility("//build/' --include='*.bzl' "$BUILD_DIR" 2>/dev/null || true)
+            echo "含 Kleaf 内部可见性声明的 .bzl 文件: ${#VFILES[@]} 个"
+
+            if [[ "${#VFILES[@]}" -gt 0 ]]; then
+              for f in "${VFILES[@]}"; do
+                sed -i -E 's|visibility\("//build/[^"]*"\)|visibility("//visibility:public")|g' "$f"
+              done
+              echo "已放宽 ${#VFILES[@]} 个文件的加载可见性"
+              echo "--- 抽查 ---"
+              grep -rn 'visibility(' "${VFILES[0]}" | head -3
             else
-              echo "::warning::$KERNEL_ROOT/tools/bazel 不存在（可能由 AOSP build 仓库提供符号链接）"
+              echo "::warning::未发现需要放宽的 visibility 声明"
+            fi
+
+            # 复核: 确认目标文件已可被外部包加载
+            TARGET_BZL="$BUILD_DIR/kernel/kleaf/impl/image/image_utils.bzl"
+            if [[ -f "$TARGET_BZL" ]]; then
+              if grep -q 'visibility("//build/' "$TARGET_BZL"; then
+                echo "::error::$TARGET_BZL 仍存在内部可见性限制"
+                exit 1
+              fi
+              echo "OK: image_utils.bzl 已放宽"
             fi
           else
-            echo "OK: tools/bazel 可执行"
+            echo "::warning::$BUILD_DIR 不存在，跳过可见性放宽"
           fi
 
       # ==================== 构建内核 ====================
@@ -553,20 +583,13 @@ jobs:
             cat "$FRAG"
             echo "======================"
 
-            # --check_bzl_visibility=false:
-            #   小米树的 msm-kernel/*.bzl 会 load("//build/kernel/kleaf/...") 里的
-            #   内部 .bzl（如 impl:image/image_utils.bzl）。当前 manifest 分支下的
-            #   Kleaf 给这些文件声明了 visibility("//build/kernel/kleaf/...")，
-            #   从 //msm-kernel 加载会报:
-            #     Starlark file ... is not visible for loading from package //msm-kernel
-            #   该检查仅为工程规范约束，关闭后不影响编译结果。
-            #   （build_with_bazel.py 用 parse_known_args，未知参数会透传给 Bazel）
+            # 说明: Kleaf 内部 .bzl 的加载可见性已在“准备 Bazel 工作区”
+            # 步骤中放宽为 public（该检查在 query 阶段触发，传参无法绕过）。
             python3 msm-kernel/build_with_bazel.py \
               -t manet gki \
               --disk_cache="$HOME/.cache/bazel" \
               --config=fast \
               --lto=thin \
-              --check_bzl_visibility=false \
               $FRAG_FLAG
 
             # 官方脚本将导出产物放入 out/msm-kernel-manet-gki/dist。
