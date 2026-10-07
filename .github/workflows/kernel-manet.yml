@@ -523,6 +523,10 @@ jobs:
           #   该检查在 `bazel query` 阶段就会触发，而 build_with_bazel.py 先跑
           #   query 再跑 build；query 不接收 --check_bzl_visibility（那是
           #   build 参数），因此仅靠传参无法绕过。这里直接放宽声明。
+          #
+          # 语法要点: .bzl 的 visibility() 接受的是「包规范」而非 label，
+          #   正确: visibility("public")
+          #   错误: visibility("//visibility:public")  -> invalid package name
           # 影响范围: 仅 Starlark 加载权限，不改变任何编译产物。
           BUILD_DIR="$KERNEL_ROOT/build"
           if [[ -d "$BUILD_DIR" ]]; then
@@ -531,24 +535,35 @@ jobs:
 
             if [[ "${#VFILES[@]}" -gt 0 ]]; then
               for f in "${VFILES[@]}"; do
-                sed -i -E 's|visibility\("//build/[^"]*"\)|visibility("//visibility:public")|g' "$f"
+                # 单值形式: visibility("//build/kernel/kleaf/...")
+                sed -i -E 's|visibility\("//build/[^"]*"\)|visibility("public")|g' "$f"
+                # 列表形式: visibility(["//build/...", "//build/..."])
+                sed -i -E 's|visibility\(\[[^]]*"//build/[^]]*\]\)|visibility("public")|g' "$f"
               done
               echo "已放宽 ${#VFILES[@]} 个文件的加载可见性"
-              echo "--- 抽查 ---"
+              echo "--- 抽查结果 ---"
               grep -rn 'visibility(' "${VFILES[0]}" | head -3
             else
               echo "::warning::未发现需要放宽的 visibility 声明"
             fi
 
-            # 复核: 确认目标文件已可被外部包加载
-            TARGET_BZL="$BUILD_DIR/kernel/kleaf/impl/image/image_utils.bzl"
-            if [[ -f "$TARGET_BZL" ]]; then
-              if grep -q 'visibility("//build/' "$TARGET_BZL"; then
-                echo "::error::$TARGET_BZL 仍存在内部可见性限制"
-                exit 1
-              fi
-              echo "OK: image_utils.bzl 已放宽"
+            # 复核: 确认已无残留的内部可见性限制
+            REMAIN="$(grep -rl 'visibility("//build/\|visibility(\[[^]]*"//build/' --include='*.bzl' "$BUILD_DIR" 2>/dev/null | head -5 || true)"
+            if [[ -n "$REMAIN" ]]; then
+              echo "::error::以下文件仍存在内部可见性限制:"
+              echo "$REMAIN"
+              exit 1
             fi
+            echo "OK: 已无残留的内部可见性限制"
+
+            # 复核: 确认未引入非法 label 语法
+            BAD="$(grep -rl 'visibility("//visibility:' --include='*.bzl' "$BUILD_DIR" 2>/dev/null | head -3 || true)"
+            if [[ -n "$BAD" ]]; then
+              echo "::error::检测到非法 visibility 语法 (label 形式):"
+              echo "$BAD"
+              exit 1
+            fi
+            echo "OK: visibility 语法正确"
           else
             echo "::warning::$BUILD_DIR 不存在，跳过可见性放宽"
           fi
