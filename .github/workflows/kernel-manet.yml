@@ -576,9 +576,10 @@ jobs:
           # 处理方式: 把指向不存在文件的 source 行注释掉，该模块自然不参与构建。
           # 注意: 需要同时扫描 common/(GKI 主体) 与 msm-kernel/(小米平台层)，
           #       本例中的 hwid 属于后者。
+          COMMON_DIR="$KERNEL_ROOT/common"
           echo "=== 扫描缺失的 Kconfig source 引用 ==="
           total_fixed=0
-          for TREE in "$COMMON" "$KERNEL_ROOT/msm-kernel"; do
+          for TREE in "$COMMON_DIR" "$KERNEL_ROOT/msm-kernel"; do
             [[ -d "$TREE" ]] || continue
             while IFS= read -r kfile; do
               rel_found=""
@@ -608,7 +609,7 @@ jobs:
           echo "全树共注释 $total_fixed 个缺失的 Kconfig source 引用"
           if [[ "$total_fixed" -gt 0 ]]; then
             echo "--- 复查 hwid 引用 ---"
-            grep -rn "hwid/Kconfig" "$COMMON" "$KERNEL_ROOT/msm-kernel" 2>/dev/null | head -3 || echo "  已无未注释的 hwid 引用"
+            grep -rn "hwid/Kconfig" "$COMMON_DIR" "$KERNEL_ROOT/msm-kernel" 2>/dev/null | head -3 || echo "  已无未注释的 hwid 引用"
           fi
 
       # ==================== 构建内核 ====================
