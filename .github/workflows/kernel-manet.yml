@@ -600,8 +600,18 @@ jobs:
 
             # 说明: Kleaf 内部 .bzl 的加载可见性已在“准备 Bazel 工作区”
             # 步骤中放宽为 public（该检查在 query 阶段触发，传参无法绕过）。
+            #
+            # --skip abl --skip dtc:
+            #   manet_gki_dist 会连带产出 *_abl_dist / *_dtc_dist，二者分别依赖
+            #   bootable/bootloader/edk2 与 @dtc 外部仓库，本次未提供，会报:
+            #     no such package '@dtc//': Repository '@dtc' is not defined
+            #     no such package 'bootable/bootloader/edk2': BUILD file not found
+            #   这两个产物（引导加载程序、设备树编译器）与内核镜像无关，
+            #   本流程只需要 Image，故按 build_with_bazel.py 的 --skip 机制跳过。
             python3 msm-kernel/build_with_bazel.py \
               -t manet gki \
+              --skip abl \
+              --skip dtc \
               --disk_cache="$HOME/.cache/bazel" \
               --config=fast \
               --lto=thin \
