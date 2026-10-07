@@ -568,6 +568,49 @@ jobs:
             echo "::warning::$BUILD_DIR 不存在，跳过可见性放宽"
           fi
 
+          # 6) 处理未开源的 vendor 模块引用
+          # Xiaomi 树引用了若干未随开源代码发布的目录，Kconfig 的 source 指令
+          # 遇到不存在的文件会直接报错终止（不是警告），例如：
+          #   drivers/misc/Kconfig:540: can't open file "drivers/misc/hwid/Kconfig"
+          # 对应 modules.list.msm.manet 里的 hwid.ko 也未开源。
+          # 处理方式: 把指向不存在文件的 source 行注释掉，该模块自然不参与构建。
+          # 注意: 需要同时扫描 common/(GKI 主体) 与 msm-kernel/(小米平台层)，
+          #       本例中的 hwid 属于后者。
+          echo "=== 扫描缺失的 Kconfig source 引用 ==="
+          total_fixed=0
+          for TREE in "$COMMON" "$KERNEL_ROOT/msm-kernel"; do
+            [[ -d "$TREE" ]] || continue
+            while IFS= read -r kfile; do
+              rel_found=""
+              while IFS= read -r rel; do
+                [[ -n "$rel" ]] || continue
+                # 跳过含 Kconfig 变量的路径，例如
+                #   source "arch/$(SRCARCH)/Kconfig"
+                # 这类路径由 Kconfig 在运行时展开，静态判断必然误报缺失。
+                if [[ "$rel" == *'$('* ]]; then
+                  continue
+                fi
+                kdir="$(dirname "$kfile")"
+                # source 路径可能相对当前 Kconfig，也可能相对树根
+                if [[ ! -e "$kdir/$rel" && ! -e "$TREE/$rel" ]]; then
+                  rel_found="$rel_found $rel"
+                fi
+              done < <(sed -n 's/^[[:space:]]*source "\([^"]*\)".*$/\1/p' "$kfile" 2>/dev/null || true)
+
+              for rel in $rel_found; do
+                sed -i "s|^[[:space:]]*source \"${rel}\"[[:space:]]*\$|# &  # disabled: not published in OSS tree|" "$kfile"
+                echo "  [$(echo "$kfile" | sed "s|$TREE/||")] 注释缺失 source: $rel"
+                total_fixed=$((total_fixed+1))
+              done
+            done < <(find "$TREE" -name Kconfig -type f 2>/dev/null)
+          done
+
+          echo "全树共注释 $total_fixed 个缺失的 Kconfig source 引用"
+          if [[ "$total_fixed" -gt 0 ]]; then
+            echo "--- 复查 hwid 引用 ---"
+            grep -rn "hwid/Kconfig" "$COMMON" "$KERNEL_ROOT/msm-kernel" 2>/dev/null | head -3 || echo "  已无未注释的 hwid 引用"
+          fi
+
       # ==================== 构建内核 ====================
       # 超时策略说明:
       #   作业级 timeout-minutes 是硬上限，超出会被 GitHub 直接取消（失败），
