@@ -511,6 +511,18 @@ jobs:
             exit 1
           fi
 
+          # 4) 校验 bazel wrapper（build_with_bazel.py 从 tools/bazel 调用）
+          if [[ ! -x "$KERNEL_ROOT/tools/bazel" ]]; then
+            if [[ -f "$KERNEL_ROOT/tools/bazel" ]]; then
+              chmod +x "$KERNEL_ROOT/tools/bazel"
+              echo "已补上 tools/bazel 可执行位"
+            else
+              echo "::warning::$KERNEL_ROOT/tools/bazel 不存在（可能由 AOSP build 仓库提供符号链接）"
+            fi
+          else
+            echo "OK: tools/bazel 可执行"
+          fi
+
       # ==================== 构建内核 ====================
       # 超时策略说明:
       #   作业级 timeout-minutes 是硬上限，超出会被 GitHub 直接取消（失败），
@@ -541,11 +553,20 @@ jobs:
             cat "$FRAG"
             echo "======================"
 
+            # --check_bzl_visibility=false:
+            #   小米树的 msm-kernel/*.bzl 会 load("//build/kernel/kleaf/...") 里的
+            #   内部 .bzl（如 impl:image/image_utils.bzl）。当前 manifest 分支下的
+            #   Kleaf 给这些文件声明了 visibility("//build/kernel/kleaf/...")，
+            #   从 //msm-kernel 加载会报:
+            #     Starlark file ... is not visible for loading from package //msm-kernel
+            #   该检查仅为工程规范约束，关闭后不影响编译结果。
+            #   （build_with_bazel.py 用 parse_known_args，未知参数会透传给 Bazel）
             python3 msm-kernel/build_with_bazel.py \
               -t manet gki \
               --disk_cache="$HOME/.cache/bazel" \
               --config=fast \
               --lto=thin \
+              --check_bzl_visibility=false \
               $FRAG_FLAG
 
             # 官方脚本将导出产物放入 out/msm-kernel-manet-gki/dist。
