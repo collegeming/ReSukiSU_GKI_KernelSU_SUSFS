@@ -606,9 +606,11 @@ jobs:
 
               for rel in $rel_found; do
                 # 目录名（如 hwid）与 Makefile 所在目录
+                # 注意: source 目标通常是 "<dir>/Kconfig"，此时模块名取目录名；
+                #       若 target 不是 Kconfig 则直接用文件名。
                 mod_dir="$(basename "$(dirname "$rel")")"
                 mod_name="$(basename "$rel")"
-                [[ "$mod_name" == "Kconfig" ]] || { mod_name="$mod_dir"; }
+                [[ "$mod_name" == "Kconfig" ]] && mod_name="$mod_dir"
                 kdir="$(dirname "$kfile")"
 
                 echo "  [$(echo "$kfile" | sed "s|$TREE/||")] 缺失 source: $rel (模块 $mod_name)"
