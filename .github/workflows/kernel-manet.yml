@@ -230,31 +230,65 @@ jobs:
       # ==================== 初始化并同步 AOSP 内核源码 ====================
       # 必须先同步 AOSP manifest，确保 common/build/Kleaf 就位，
       # 再克隆 Xiaomi 源码到 msm-kernel，避免 repo 项目冲突
+      #
+      # 容错说明: android.googlesource.com 偶发连接失败（此前遇到过
+      # "Cannot fetch kernel/common" 导致整轮构建作废）。
+      # 因此不使用 --fail-fast，改为失败后重试整轮 sync：
+      # repo sync 是增量的，重试只会补齐缺失部分，代价很小。
       - name: 初始化并同步 AOSP 内核源码
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
+          set -uo pipefail
+
           echo "初始化 repo，分支: $AOSP_MANIFEST_BRANCH"
           $REPO init --depth=1 -u "$AOSP_MANIFEST_URL" -b "$AOSP_MANIFEST_BRANCH" --repo-rev=v2.16
 
-          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
-          echo "AOSP common 同步完成 (HEAD 由 manifest 决定，稍后按 ACK_SHA 校准)"
+          MAX_ATTEMPTS=4
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "========== repo sync 第 $attempt/$MAX_ATTEMPTS 次 =========="
+            if $REPO sync -c -j$(nproc --all) --no-tags --retry-fetches=5; then
+              echo "AOSP common 同步成功 (第 $attempt 次)"
+              echo "HEAD: $(git -C common rev-parse HEAD 2>/dev/null || echo 'n/a')"
+              exit 0
+            fi
+            echo "::warning::repo sync 第 $attempt 次失败，稍后重试"
+            sleep 15
+          done
+
+          echo "::error::repo sync 连续 $MAX_ATTEMPTS 次失败，请检查 android.googlesource.com 可达性"
+          exit 1
 
       # ==================== 克隆 Xiaomi manet 源码 ====================
-      # AOSP manifest 不包含 msm-kernel 项目，直接克隆 Xiaomi 源码到该目录
+      # AOSP manifest 不包含 msm-kernel 项目，直接克隆 Xiaomi 源码到该目录。
+      # 同样对网络抖动做重试。
       - name: 克隆 Xiaomi manet 源码
         run: |
+          set -uo pipefail
+
           # 若 repo sync 意外创建了 msm-kernel 目录，先清除避免冲突
           if [[ -e "$KERNEL_ROOT/msm-kernel" ]]; then
             echo "::warning::msm-kernel 已存在，移除后重新克隆"
             rm -rf "$KERNEL_ROOT/msm-kernel"
           fi
 
-          echo "克隆 Xiaomi manet 源码 (分支: $XIAOMI_BRANCH)..."
-          git clone --depth 1 "$XIAOMI_REPO" "$KERNEL_ROOT/msm-kernel" -b "$XIAOMI_BRANCH"
-
-          # 获取固定提交
-          git -C "$KERNEL_ROOT/msm-kernel" fetch origin "$XIAOMI_COMMIT" --depth=1
-          git -C "$KERNEL_ROOT/msm-kernel" checkout "$XIAOMI_COMMIT"
+          MAX_ATTEMPTS=4
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "========== 克隆 Xiaomi 源码 第 $attempt/$MAX_ATTEMPTS 次 =========="
+            rm -rf "$KERNEL_ROOT/msm-kernel"
+            if git clone --depth 1 "$XIAOMI_REPO" "$KERNEL_ROOT/msm-kernel" -b "$XIAOMI_BRANCH"; then
+              if git -C "$KERNEL_ROOT/msm-kernel" fetch origin "$XIAOMI_COMMIT" --depth=1 \
+                 && git -C "$KERNEL_ROOT/msm-kernel" checkout "$XIAOMI_COMMIT"; then
+                echo "克隆并检出成功 (第 $attempt 次)"
+                break
+              fi
+            fi
+            if [[ "$attempt" -eq "$MAX_ATTEMPTS" ]]; then
+              echo "::error::克隆 Xiaomi 源码连续 $MAX_ATTEMPTS 次失败"
+              exit 1
+            fi
+            echo "::warning::第 $attempt 次克隆失败，稍后重试"
+            sleep 15
+          done
 
           # 校验 Xiaomi 提交
           ACTUAL_COMMIT="$(git -C "$KERNEL_ROOT/msm-kernel" rev-parse HEAD)"
@@ -377,7 +411,9 @@ jobs:
         with:
           timeout_minutes: 100
           max_attempts: 2
-          retry_on: timeout
+          # Bazel 首次构建需联网拉取工具链/BUILD 依赖，网络抖动会造成失败，
+          # 故对任意失败都重试一次（第二次已有 ccache 与 Bazel 磁盘缓存，更快）。
+          retry_on: any
           command: |
             set -ex
             cd "$KERNEL_ROOT"
