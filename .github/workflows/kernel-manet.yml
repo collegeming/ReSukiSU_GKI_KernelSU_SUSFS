@@ -36,17 +36,10 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
-      # ==================== 源码引用(留空=跟随最新) ====================
-      xiaomi_commit:
-        description: "Xiaomi 提交 SHA (留空=跟随 bsp-manet-u-oss 最新)"
-        required: false
-        type: string
-        default: ""
-      expected_ack_sha:
-        description: "AOSP ACK_SHA 校验值 (留空=采用 Xiaomi 源码 android/ACK_SHA)"
-        required: false
-        type: string
-        default: ""
+      # 源码引用无需人工指定：构建时自动从远端解析
+      #   - Xiaomi 提交  = bsp-manet-u-oss 分支 HEAD
+      #   - ACK 基线     = Xiaomi 源码 android/ACK_SHA
+      # 解析结果会打印到日志，可据此复现。
 
       # ==================== KernelSU 配置 ====================
       ksu_ref:
@@ -119,33 +112,21 @@ jobs:
 
     steps:
       # ==================== 解析源码引用 ====================
-      # 留空 => 动态取分支 HEAD / 采用 Xiaomi 源码自带的 ACK_SHA
-      # 填入 => 使用指定值并校验，用于复现历史构建
+      # 全自动：从远端解析，无需人工指定
+      #   - Xiaomi 提交 = bsp-manet-u-oss 分支当前 HEAD
+      #   - ACK 基线    = 稍后读取 Xiaomi 源码自带的 android/ACK_SHA
+      # 解析结果打印到日志，可据此复现同一次构建。
       - name: 解析源码引用
         id: refs
         run: |
           set -euo pipefail
 
-          XIAOMI_COMMIT="${{ inputs.xiaomi_commit }}"
-          if [[ -z "$XIAOMI_COMMIT" ]]; then
-            echo "未指定 Xiaomi 提交，查询 $XIAOMI_BRANCH 分支 HEAD ..."
-            XIAOMI_COMMIT="$(git ls-remote "$XIAOMI_REPO" "refs/heads/$XIAOMI_BRANCH" | awk '{print $1}')"
-            [[ -n "$XIAOMI_COMMIT" ]] || { echo "::error::无法解析 $XIAOMI_BRANCH 分支 HEAD"; exit 1; }
-            echo "解析到最新提交: $XIAOMI_COMMIT"
-          else
-            echo "使用指定 Xiaomi 提交: $XIAOMI_COMMIT"
-          fi
+          echo "查询 $XIAOMI_BRANCH 分支 HEAD ..."
+          XIAOMI_COMMIT="$(git ls-remote "$XIAOMI_REPO" "refs/heads/$XIAOMI_BRANCH" | awk '{print $1}')"
+          [[ -n "$XIAOMI_COMMIT" ]] || { echo "::error::无法解析 $XIAOMI_BRANCH 分支 HEAD"; exit 1; }
+          echo "解析到最新提交: $XIAOMI_COMMIT"
 
           echo "XIAOMI_COMMIT=$XIAOMI_COMMIT" >> $GITHUB_ENV
-
-          # ACK_SHA: 留空时不在这一步校验，改为克隆源码后读取其自带值再校验
-          ACK_INPUT="${{ inputs.expected_ack_sha }}"
-          if [[ -n "$ACK_INPUT" ]]; then
-            echo "期望 ACK_SHA (用户指定): $ACK_INPUT"
-          else
-            echo "未指定 ACK_SHA，将采用 Xiaomi 源码 android/ACK_SHA"
-          fi
-          echo "ACK_INPUT=$ACK_INPUT" >> $GITHUB_ENV
 
       # ==================== 构建信息摘要 ====================
       - name: 构建信息摘要
@@ -157,8 +138,7 @@ jobs:
           echo "内核版本      : 6.1"
           echo "设备          : Xiaomi manet"
           echo "Xiaomi 分支   : $XIAOMI_BRANCH"
-          echo "Xiaomi 提交   : $XIAOMI_COMMIT"
-          echo "ACK 校验      : ${ACK_INPUT:-<采用 Xiaomi 源码自带值>}"
+          echo "Xiaomi 提交   : $XIAOMI_COMMIT  (远端自动解析)"
           echo "KSU 分支      : ${{ inputs.ksu_ref }}"
           echo "SUSFS         : ${{ inputs.enable_susfs }}"
           echo "Droidspaces   : ${{ inputs.droidspaces }}"
@@ -287,7 +267,7 @@ jobs:
 
       # ==================== 校准 AOSP common 到 Xiaomi 期望的 ACK 基线 ====================
       # Xiaomi 源码的 android/ACK_SHA 指明它期望编译在哪个 AOSP common 提交上。
-      # 默认采用该值(上游最新)；用户显式指定时以用户值为准。
+      # 该值由 Xiaomi 源码自身决定，自动读取，无需人工干预。
       - name: 校准 AOSP common 到 ACK 基线
         working-directory: ${{ env.KERNEL_ROOT }}/common
         run: |
@@ -299,23 +279,8 @@ jobs:
             exit 1
           fi
 
-          XIAOMI_ACK="$(tr -d '[:space:]' < "$ACK_SHA_FILE")"
-          echo "Xiaomi 源码期望的 ACK_SHA: $XIAOMI_ACK"
-
-          if [[ -n "${ACK_INPUT:-}" ]]; then
-            TARGET_ACK="$ACK_INPUT"
-            echo "采用用户指定的 ACK_SHA: $TARGET_ACK"
-          else
-            TARGET_ACK="$XIAOMI_ACK"
-            echo "采用 Xiaomi 源码自带的 ACK_SHA: $TARGET_ACK"
-          fi
-
-          if [[ "$XIAOMI_ACK" != "$TARGET_ACK" ]]; then
-            echo "::warning::目标 ACK_SHA 与 Xiaomi 源码期望值不一致"
-            echo "::warning::  源码期望: $XIAOMI_ACK"
-            echo "::warning::  实际使用: $TARGET_ACK"
-            echo "::warning::  偏离该基线可能导致厂商模块不兼容或编译失败"
-          fi
+          TARGET_ACK="$(tr -d '[:space:]' < "$ACK_SHA_FILE")"
+          echo "从 Xiaomi 源码解析到 ACK_SHA: $TARGET_ACK"
 
           COMMON_REMOTE="$(git remote | head -n 1)"
           [[ -n "$COMMON_REMOTE" ]] || { echo "::error::common 没有可用 Git remote"; exit 1; }
