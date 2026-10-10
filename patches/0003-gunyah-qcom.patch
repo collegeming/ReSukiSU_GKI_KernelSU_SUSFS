@@ -1,0 +1,90 @@
+--- a/drivers/virt/gunyah/gunyah_qcom.c
++++ b/drivers/virt/gunyah/gunyah_qcom.c
+@@ -14,12 +14,29 @@
+ #define QCOM_SCM_RM_MANAGED_VMID	0x3A
+ #define QCOM_SCM_MAX_MANAGED_VMID	0x3F
+ 
++/*
++ * ACL 里带的是 RM 管理的 VMID；超出 SCM 可管理范围的用 RM 哨兵值代替。
++ * 抽成 helper 让 share / reclaim 共用同一套映射，避免两处判定漂移。
++ */
++static u16 qcom_scm_map_vmid(u16 vmid)
++{
++	if (vmid <= QCOM_SCM_MAX_MANAGED_VMID)
++		return vmid;
++
++	return QCOM_SCM_RM_MANAGED_VMID;
++}
++
+ static int qcom_scm_gh_rm_pre_mem_share(void *rm, struct gh_rm_mem_parcel *mem_parcel)
+ {
+ 	struct qcom_scm_vmperm *new_perms;
+ 	u64 src, src_cpy;
+ 	int ret = 0, i, n, rb_ret;
+-	u16 vmid;
++	u16 self_vmid, vmid;
++
++	/* 借出内存的 source 必须是本机(HLOS)真实 VMID，写死会被 RM 拒绝 */
++	ret = gh_rm_get_vmid(rm, &self_vmid);
++	if (ret)
++		return ret;
+ 
+ 	new_perms = kcalloc(mem_parcel->n_acl_entries, sizeof(*new_perms), GFP_KERNEL);
+ 	if (!new_perms)
+@@ -27,10 +44,7 @@
+ 
+ 	for (n = 0; n < mem_parcel->n_acl_entries; n++) {
+ 		vmid = le16_to_cpu(mem_parcel->acl_entries[n].vmid);
+-		if (vmid <= QCOM_SCM_MAX_MANAGED_VMID)
+-			new_perms[n].vmid = vmid;
+-		else
+-			new_perms[n].vmid = QCOM_SCM_RM_MANAGED_VMID;
++		new_perms[n].vmid = qcom_scm_map_vmid(vmid);
+ 		if (mem_parcel->acl_entries[n].perms & GH_RM_ACL_X)
+ 			new_perms[n].perm |= QCOM_SCM_PERM_EXEC;
+ 		if (mem_parcel->acl_entries[n].perms & GH_RM_ACL_W)
+@@ -39,7 +53,7 @@
+ 			new_perms[n].perm |= QCOM_SCM_PERM_READ;
+ 	}
+ 
+-	src = BIT_ULL(QCOM_SCM_VMID_HLOS);
++	src = BIT_ULL(qcom_scm_map_vmid(self_vmid));
+ 
+ 	for (i = 0; i < mem_parcel->n_mem_entries; i++) {
+ 		src_cpy = src;
+@@ -56,10 +70,7 @@
+ 	src = 0;
+ 	for (n = 0; n < mem_parcel->n_acl_entries; n++) {
+ 		vmid = le16_to_cpu(mem_parcel->acl_entries[n].vmid);
+-		if (vmid <= QCOM_SCM_MAX_MANAGED_VMID)
+-			src |= BIT_ULL(vmid);
+-		else
+-			src |= BIT_ULL(QCOM_SCM_RM_MANAGED_VMID);
++		src |= BIT_ULL(qcom_scm_map_vmid(vmid));
+ 	}
+ 
+ 	new_perms[0].vmid = QCOM_SCM_VMID_HLOS;
+@@ -87,17 +98,18 @@
+ 	struct qcom_scm_vmperm new_perms;
+ 	u64 src = 0, src_cpy;
+ 	int ret = 0, i, n;
+-	u16 vmid;
++	u16 self_vmid, vmid;
++
++	ret = gh_rm_get_vmid(rm, &self_vmid);
++	if (ret)
++		return ret;
+ 
+ 	new_perms.vmid = QCOM_SCM_VMID_HLOS;
+ 	new_perms.perm = QCOM_SCM_PERM_EXEC | QCOM_SCM_PERM_WRITE | QCOM_SCM_PERM_READ;
+ 
+ 	for (n = 0; n < mem_parcel->n_acl_entries; n++) {
+ 		vmid = le16_to_cpu(mem_parcel->acl_entries[n].vmid);
+-		if (vmid <= QCOM_SCM_MAX_MANAGED_VMID)
+-			src |= (1ull << vmid);
+-		else
+-			src |= (1ull << QCOM_SCM_RM_MANAGED_VMID);
++		src |= BIT_ULL(qcom_scm_map_vmid(vmid));
+ 	}
+ 
+ 	for (i = 0; i < mem_parcel->n_mem_entries; i++) {

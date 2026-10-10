@@ -1,0 +1,50 @@
+--- a/drivers/virt/gunyah/vm_mgr_mm.c
++++ b/drivers/virt/gunyah/vm_mgr_mm.c
+@@ -54,9 +54,9 @@
+ 		account_locked_vm(ghvm->mm, mapping->npages, false);
+ 	}
+ 
+-	kfree(mapping->pages);
++	kvfree(mapping->pages);
+ 	kfree(mapping->parcel.acl_entries);
+-	kfree(mapping->parcel.mem_entries);
++	kvfree(mapping->parcel.mem_entries);
+ 
+ 	list_del(&mapping->list);
+ }
+@@ -148,7 +148,12 @@
+ 	if (ret)
+ 		goto free_mapping;
+ 
+-	mapping->pages = kcalloc(mapping->npages, sizeof(*mapping->pages), GFP_KERNEL_ACCOUNT);
++	/*
++	 * Large guests can require hundreds of KiB just for the pinned-page
++	 * pointer array; use vmalloc fallback rather than high-order kmalloc.
++	 */
++	mapping->pages = kvcalloc(mapping->npages, sizeof(*mapping->pages),
++				  GFP_KERNEL_ACCOUNT);
+ 	if (!mapping->pages) {
+ 		ret = -ENOMEM;
+ 		mapping->npages = 0; /* update npages for reclaim */
+@@ -212,9 +217,9 @@
+ 			parcel->n_mem_entries++;
+ 	}
+ 
+-	parcel->mem_entries = kcalloc(parcel->n_mem_entries,
+-					sizeof(parcel->mem_entries[0]),
+-					GFP_KERNEL_ACCOUNT);
++	parcel->mem_entries = kvcalloc(parcel->n_mem_entries,
++				       sizeof(parcel->mem_entries[0]),
++				       GFP_KERNEL_ACCOUNT);
+ 	if (!parcel->mem_entries) {
+ 		ret = -ENOMEM;
+ 		goto free_acl;
+@@ -248,7 +253,7 @@
+ unpin_pages:
+ 	unpin_user_pages(mapping->pages, pinned);
+ free_pages:
+-	kfree(mapping->pages);
++	kvfree(mapping->pages);
+ unlock_pages:
+ 	account_locked_vm(ghvm->mm, mapping->npages, false);
+ free_mapping:

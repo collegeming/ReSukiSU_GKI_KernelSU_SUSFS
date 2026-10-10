@@ -271,38 +271,56 @@ log "===== 1. 添加 ReSukiSU (ref: $KSU_REF) ====="
 
 # KernelSU 源码由 setup.sh 放在 GKI_ROOT 下
 KSU_SRC="$WORKSPACE/KernelSU"
-KDIR="$COMMON/drivers"
 [[ -d "$KSU_SRC" ]] || die "ReSukiSU 安装失败: $KSU_SRC 不存在"
-[[ -d "$KDIR" ]] || die "GKI 树缺少 drivers 目录: $KDIR"
 
-# ① symlink -> 真实目录 (Bazel 不跨包跟随 symlink)
-if [[ -L "$KDIR/kernelsu" ]]; then
-  log "把 common/drivers/kernelsu 的 symlink 换成真实拷贝(Bazel 需要)"
-  rm -f "$KDIR/kernelsu"
-  cp -r "$KSU_SRC/kernel" "$KDIR/kernelsu"
-elif [[ ! -d "$KDIR/kernelsu" ]]; then
-  warn "setup.sh 未建立 kernelsu 链接，手动拷贝"
-  cp -r "$KSU_SRC/kernel" "$KDIR/kernelsu"
-fi
-[[ -f "$KDIR/kernelsu/Kconfig" ]] || die "kernelsu/Kconfig 缺失，KernelSU 源码不完整"
+# 把 KernelSU 驱动挂到「所有」内核树里。
+#
+# 为什么不是只挂 common/:
+#   msm-kernel/ 本身就是一棵完整的 kernel 源码树(自带 drivers/、arch/、Kconfig)，
+#   Bazel 目标 //msm-kernel:manet_gki_config 走的是 msm-kernel/ 的 Kconfig 解析。
+#   设备的 /proc/kallsyms 也印证了这点:
+#     gh_vm_mem_alloc               T            <- 内建进 vmlinux(来自 common/)
+#     qcom_scm_gh_rm_pre_mem_share  T [gunyah_qcom] <- 厂商 .ko(来自 msm-kernel/)
+#   即两棵树都会被真正编译。CONFIG_KSU 只挂到 common/ 时，msm-kernel 侧的配置
+#   校验依然报 "CONFIG_KSU: actual ''"，构建中止。
+#   因此在两棵树里都挂上，哪一侧解析都能命中。
+#
+# 另一个必须自己处理的点: setup.sh 建的是 symlink (drivers/kernelsu -> KernelSU/kernel)，
+# 而 Bazel 收包不跟随指向包外的 symlink，会被当成空目录。这里统一换成真实拷贝。
+KSU_TREES=("$COMMON" "$WORKSPACE/msm-kernel")
+for TREE in "${KSU_TREES[@]}"; do
+  KDIR="$TREE/drivers"
+  if [[ ! -d "$KDIR" ]]; then
+    warn "跳过 KernelSU 挂载(无 drivers 目录): $TREE"
+    continue
+  fi
 
-# Makefile: 挂上 obj-$(CONFIG_KSU) += kernelsu/
-grep -q 'kernelsu' "$KDIR/Makefile" 2>/dev/null \
-  || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> "$KDIR/Makefile"
+  # symlink -> 真实目录 (Bazel 需要)
+  if [[ -L "$KDIR/kernelsu" ]]; then
+    log "  $TREE: symlink -> 真实拷贝"
+    rm -f "$KDIR/kernelsu"
+    cp -r "$KSU_SRC/kernel" "$KDIR/kernelsu"
+  elif [[ ! -d "$KDIR/kernelsu" ]]; then
+    cp -r "$KSU_SRC/kernel" "$KDIR/kernelsu"
+  fi
+  [[ -f "$KDIR/kernelsu/Kconfig" ]] || die "$TREE: kernelsu/Kconfig 缺失"
 
-# ② Kconfig: 确保 source 行存在且位于顶层(文件末尾)
-if ! grep -q 'drivers/kernelsu/Kconfig' "$KDIR/Kconfig" 2>/dev/null; then
-  # 清掉 setup.sh 可能插在嵌套块里的那一行，避免重复 source
-  sed -i '/drivers\/kernelsu\/Kconfig/d' "$KDIR/Kconfig" 2>/dev/null || true
-  printf '\nsource "drivers/kernelsu/Kconfig"\n' >> "$KDIR/Kconfig"
-  log "已在 common/drivers/Kconfig 末尾追加 source 行"
-fi
+  # Makefile: obj-$(CONFIG_KSU) += kernelsu/
+  grep -q 'kernelsu' "$KDIR/Makefile" 2>/dev/null \
+    || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> "$KDIR/Makefile"
 
-# 校验 CONFIG_KSU 确实被声明 (grep -R 才会跟随 symlink；此处已是真实目录)
-if ! grep -RqsE '^[[:space:]]*(menu)?config[[:space:]]+KSU$' "$KDIR/kernelsu" 2>/dev/null; then
-  die "kernelsu/Kconfig 中找不到 config KSU 声明，KernelSU 集成不完整"
-fi
-log "ReSukiSU 安装完成 (源码: $KSU_SRC, 驱动: $KDIR/kernelsu)"
+  # Kconfig: source 行确保在顶层(文件末尾)
+  if ! grep -q 'drivers/kernelsu/Kconfig' "$KDIR/Kconfig" 2>/dev/null; then
+    sed -i '/drivers\/kernelsu\/Kconfig/d' "$KDIR/Kconfig" 2>/dev/null || true
+    printf '\nsource "drivers/kernelsu/Kconfig"\n' >> "$KDIR/Kconfig"
+  fi
+
+  # 校验 CONFIG_KSU 确实被声明
+  grep -RqsE '^[[:space:]]*(menu)?config[[:space:]]+KSU$' "$KDIR/kernelsu" 2>/dev/null \
+    || die "$TREE: kernelsu/Kconfig 中找不到 config KSU 声明"
+  log "  $TREE: KernelSU 已挂载"
+done
+log "ReSukiSU 安装完成 (源码: $KSU_SRC)"
 
 # ==================== 2. SUSFS ====================
 if $SUSFS; then
@@ -390,41 +408,62 @@ fi
 #   1) gh_vm_mem_alloc() 用高阶 kcalloc 分配 pinned page 指针数组
 #      (4 GiB 客机即需 8 MiB)，碎片化后失败 -> "Out of memory (os error 12)"
 #   2) SCM VMID 映射错误 -> RM 拒绝 mem parcel -> "No such device (os error 19)"
-# 补丁移植自 DroidVM 官方 FAQ 给出的两个上游修复，作用于 msm-kernel/ 平台层
-# (gunyah_qcom.c 由 CONFIG_GUNYAH_QCOM_PLATFORM 门控，属 Xiaomi BSP)。
+# 补丁移植自 DroidVM 官方 FAQ 给出的两个上游修复。
+#
+# 两棵树都可能承载 Gunyah: common/ 里的 vm_mgr_mm.c 会内建进 vmlinux
+# (设备 kallsyms 中 gh_vm_mem_alloc 无 [module] 标记)，而 msm-kernel/ 里的
+# gunyah_qcom.c 编成厂商 .ko (qcom_scm_gh_rm_pre_mem_share T [gunyah_qcom])。
+# 因此按文件粒度分别在每棵树里尝试应用，哪棵树存在该文件就修哪棵；
+# 补丁已改为树内相对路径(patches/0003-gunyah-*.patch)，-p1 从树根即可。
 if $GUNYAH_FIX; then
   log "===== 2.5 应用 Gunyah SM8650 启动修复 ====="
 
-  gunyah_patch="$REPO_ROOT/patches/0003-gunyah-sm8650-startup-fix.patch"
-  if [[ ! -f "$gunyah_patch" ]]; then
-    warn "Gunyah 修复补丁不存在，跳过: $gunyah_patch"
-  else
-    # 补丁路径带 msm-kernel/ 前缀，故在 WORKSPACE 根目录以 -p1 应用。
-    # 为不污染调用者的 cwd，在子 shell 中切换目录。
-    if [[ ! -d "$WORKSPACE/msm-kernel/drivers/virt/gunyah" ]]; then
-      warn "未找到 msm-kernel/drivers/virt/gunyah，跳过 Gunyah 修复"
-    else
+  GUNYAH_MAP=(
+    "0003-gunyah-vm_mgr_mm.patch:vm_mgr_mm.c:kvcalloc(mapping->npages"
+    "0003-gunyah-qcom.patch:gunyah_qcom.c:qcom_scm_map_vmid"
+  )
+
+  for ENTRY in "${GUNYAH_MAP[@]}"; do
+    PNAME="${ENTRY%%:*}"
+    REST="${ENTRY#*:}"
+    FNAME="${REST%%:*}"
+    MARK="${REST#*:}"
+    PPATH="$REPO_ROOT/patches/$PNAME"
+
+    if [[ ! -f "$PPATH" ]]; then
+      warn "Gunyah 补丁不存在，跳过: $PPATH"
+      continue
+    fi
+
+    found=false
+    for TREE in "${KSU_TREES[@]}"; do
+      TARGET="$TREE/drivers/virt/gunyah/$FNAME"
+      [[ -f "$TARGET" ]] || continue
+
+      # 已应用则跳过(apply_required_patch 自带 reverse-dry-run 检测)
+      if grep -qF "$MARK" "$TARGET" 2>/dev/null; then
+        log "  $TREE/$FNAME 已是修复后状态，跳过"
+        found=true
+        continue
+      fi
+
       (
-        cd "$WORKSPACE"
-        apply_required_patch "$gunyah_patch" 1
+        cd "$TREE"
+        apply_required_patch "$PPATH" 1
       )
 
-      # 确认两个改动点都落到源码里 (避免补丁"成功"但实际没改到目标函数)
-      if grep -q 'kvcalloc(mapping->npages' \
-           "$WORKSPACE/msm-kernel/drivers/virt/gunyah/vm_mgr_mm.c" 2>/dev/null; then
-        log "  校验通过: vm_mgr_mm.c 已使用 kvcalloc"
+      if grep -qF "$MARK" "$TARGET" 2>/dev/null; then
+        log "  校验通过: ${TREE#$WORKSPACE/}/drivers/virt/gunyah/$FNAME ($MARK)"
+        found=true
       else
-        die "kvcalloc 校验失败: vm_mgr_mm.c 未出现 kvcalloc(mapping->npages"
+        die "Gunyah 校验失败: $TARGET 未出现 $MARK"
       fi
+    done
 
-      if grep -q 'qcom_scm_map_vmid' \
-           "$WORKSPACE/msm-kernel/drivers/virt/gunyah/gunyah_qcom.c" 2>/dev/null; then
-        log "  校验通过: gunyah_qcom.c 已使用 qcom_scm_map_vmid"
-      else
-        die "VMID 校验失败: gunyah_qcom.c 未出现 qcom_scm_map_vmid"
-      fi
+    if ! $found; then
+      warn "两棵树都未找到 drivers/virt/gunyah/$FNAME，跳过该补丁"
     fi
-  fi
+  done
 fi
 
 # ==================== 3. Droidspaces SYSVIPC kABI ====================
