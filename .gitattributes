@@ -1,3 +1,5 @@
 # Unified patch payloads intentionally preserve space-prefixed blank context
 # lines and kernel-style tab indentation.
 security_patch/*.patch -whitespace
+# Kernel patch payloads must stay LF: `patch` on Linux CI is line-ending sensitive
+patches/*.patch -text -whitespace
