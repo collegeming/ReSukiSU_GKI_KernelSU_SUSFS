@@ -93,6 +93,11 @@ on:
         required: false
         type: boolean
         default: true
+      gunyah_fix:
+        description: "应用 Gunyah SM8650 修复 (修复 8 Gen 3 无法创建虚拟机 / 兼容 DroidVM)"
+        required: false
+        type: boolean
+        default: true
 
       # ==================== 打包 ====================
       build_anykernel3:
@@ -394,6 +399,13 @@ jobs:
 
           if [[ "${{ inputs.use_bbg }}" == "true" ]]; then
             ARGS+=(--use-bbg)
+          fi
+
+          # Gunyah SM8650 虚拟机启动修复 (让 DroidVM 等 crosvm+Gunyah 虚拟机管理器可用)
+          if [[ "${{ inputs.gunyah_fix }}" == "true" ]]; then
+            ARGS+=(--gunyah-fix)
+          else
+            ARGS+=(--no-gunyah-fix)
           fi
 
           echo "执行: bash $SCRIPT ${ARGS[*]}"
