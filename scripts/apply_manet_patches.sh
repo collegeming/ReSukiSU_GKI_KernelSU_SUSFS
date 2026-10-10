@@ -242,17 +242,48 @@ frag_add_if_exists() {
 }
 
 # ==================== 1. KernelSU (ReSukiSU) ====================
+# 注意: manet 工作区是双树结构 —— common/ 是 repo sync 出来的 GKI 内核主体，
+# msm-kernel/ 是 Xiaomi BSP 平台层。Bazel 目标 manet_gki_config 会把 ksu.fragment
+# 施加到 common/ 的配置上，所以 KernelSU 必须装进 common/：
+# setup.sh 会以「当前工作目录」为基准去改 drivers/Kconfig、drivers/Makefile 并
+# 放置 KernelSU/ 源码。若在 $WORKSPACE 根目录执行，改动会落在仓库根而不是内核树里，
+# 结果是 CONFIG_KSU 无人声明；Bazel 配置校验随即报
+#   CONFIG_KSU: actual '', expected 'CONFIG_KSU=y' from common/.../ksu.fragment
+# 并让整个构建失败(这正是 kernel-manet.yml 一直失败的原因)。
 log "===== 1. 添加 ReSukiSU (ref: $KSU_REF) ====="
 (
-  cd "$WORKSPACE"
+  cd "$COMMON"
   curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s "$KSU_REF"
 )
 
-# 验证 KernelSU 已安装
-if [[ ! -d "$WORKSPACE/KernelSU" ]]; then
-  die "ReSukiSU 安装失败: $WORKSPACE/KernelSU 不存在"
+# 验证 KernelSU 已安装到 GKI 树 (而非工作区根目录)
+if [[ ! -d "$COMMON/KernelSU" ]]; then
+  # 兼容旧行为：若落在了工作区根目录，移到 common/ 下并重做 Kconfig/Makefile 关联
+  if [[ -d "$WORKSPACE/KernelSU" ]]; then
+    warn "KernelSU 落在了工作区根目录(预期在 common/)，正在迁移"
+    mv "$WORKSPACE/KernelSU" "$COMMON/KernelSU"
+  else
+    die "ReSukiSU 安装失败: $COMMON/KernelSU 不存在"
+  fi
 fi
-log "ReSukiSU 安装完成"
+
+# 确认 Kconfig/Makefile 已在内核树里挂上 KernelSU 驱动
+if ! grep -qE 'KernelSU' "$COMMON/drivers/Kconfig" 2>/dev/null; then
+  warn "common/drivers/Kconfig 未引用 KernelSU，手动补 source 行"
+  grep -q 'source "drivers/kernelsu/Kconfig"' "$COMMON/drivers/Kconfig" 2>/dev/null \
+    || echo 'source "drivers/kernelsu/Kconfig"' >> "$COMMON/drivers/Kconfig"
+fi
+if ! grep -qE 'kernelsu' "$COMMON/drivers/Makefile" 2>/dev/null; then
+  warn "common/drivers/Makefile 未引用 KernelSU，手动补 obj 行"
+  grep -q 'kernelsu' "$COMMON/drivers/Makefile" 2>/dev/null \
+    || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> "$COMMON/drivers/Makefile"
+fi
+
+# 声明 CONFIG_KSU 的 Kconfig 符号，确保 fragment 校验能通过
+if ! grep -rqsE '^[[:space:]]*(menu)?config[[:space:]]+KSU$' "$COMMON/drivers" 2>/dev/null; then
+  die "common/ 中找不到 config KSU 声明，KernelSU 集成不完整"
+fi
+log "ReSukiSU 安装完成 (common/)"
 
 # ==================== 2. SUSFS ====================
 if $SUSFS; then
