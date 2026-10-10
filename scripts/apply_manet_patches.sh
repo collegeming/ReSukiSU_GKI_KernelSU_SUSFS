@@ -372,6 +372,35 @@ if $SUSFS; then
   # 应用 SUSFS 主补丁 (必需)
   apply_required_patch "50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch" 1
 
+  # ---------- SUSFS 旧基线兼容: VMA_PAD_START ----------
+  # manet ACK 基线是 6.1.25。新版 SUSFS 在 fs/proc/task_mmu.c 使用
+  # VMA_PAD_START(vma)，但该宏是后续 stable 合入，6.1.25 还没有。
+  # 未补时 clang 直接报:
+  #   error: call to undeclared function 'VMA_PAD_START'
+  # 语义上 SUSFS 需要的是虚拟 VMA 的末端地址，旧内核等价写法就是 vma->vm_end。
+  task_mmu="$COMMON/fs/proc/task_mmu.c"
+  if [[ -f "$task_mmu" ]] && grep -q 'VMA_PAD_START' "$task_mmu" \
+     && ! grep -q 'define VMA_PAD_START' "$task_mmu"; then
+    sed -i '0,/^#include /s//#ifndef VMA_PAD_START\n#define VMA_PAD_START(vma) ((vma)->vm_end)\n#endif\n&/' "$task_mmu"
+    log "已为 6.1.$(extract_sublevel) 补 VMA_PAD_START 兼容定义"
+  fi
+
+  # ---------- SUSFS 宏声明兜底 ----------
+  # 某些旧 ACK 的 task_mmu.c include 上下文与 SUSFS patch 预期不同，导致代码 hunk
+  # 成功但 susfs_def.h 的 include hunk 漏掉。检测到 SUSFS 宏却没有头文件时补齐。
+  if [[ -f "$task_mmu" ]] && \
+     grep -qE 'SUSFS_IS_INODE_SUS_MAP|SUSFS_IS_INODE_OPEN_REDIRECT' "$task_mmu" && \
+     ! grep -qF '#include <linux/susfs_def.h>' "$task_mmu"; then
+    if grep -qF '#include <linux/pkeys.h>' "$task_mmu"; then
+      sed -i '/#include <linux\/pkeys.h>/a #if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux/susfs_def.h>\n#endif' "$task_mmu"
+    elif grep -qF '#include <linux/uaccess.h>' "$task_mmu"; then
+      sed -i '/#include <linux\/uaccess.h>/a #if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux/susfs_def.h>\n#endif' "$task_mmu"
+    else
+      sed -i '0,/^#include /s//#if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux/susfs_def.h>\n#endif\n&/' "$task_mmu"
+    fi
+    log "已补 task_mmu.c 的 susfs_def.h 条件 include"
+  fi
+
   # SUSFS 配置写入 fragment
   frag_add_block "$(cat <<'EOF'
 CONFIG_KSU_SUSFS=y
