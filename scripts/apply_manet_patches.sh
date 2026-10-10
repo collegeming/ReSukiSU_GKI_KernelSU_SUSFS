@@ -674,6 +674,66 @@ if $USE_BBG; then
   log "BBG 防格机应用完成"
 fi
 
+# ==================== 7.5 修复 glibc 2.38+ 链接错误 ====================
+# 症状: 编译到链接阶段报
+#   ld.lld: error: undefined symbol: __isoc23_strtol / __isoc23_strtoul / __isoc23_strtoull
+#   clang-17: error: linker command failed with exit code 1
+#
+# 原因: glibc 2.38 起把 strtol/strtoul/strtoull 改成了 __isoc23_* 符号(ISO C23 语义)。
+#   resolve_btfids 这个 host 工具由 tools/bpf/resolve_btfids/Makefile 通过子 make 编译，
+#   子 make 没有继承主编译的 EXTRA_CFLAGS，于是仍按旧 ABI 链接，落在新 glibc 上就找不到符号。
+#   上游修复(见 build.yml「修复 glibc 2.38 兼容性」)是给该子 make 传入 EXTRA_CFLAGS。
+#
+# 触发条件与上游一致: 6.1 且 SUBLEVEL <= 43 (manet 为 6.1.x 早期基线，命中)。
+# glibc < 2.38 时无需处理，直接跳过。
+log "===== 7.5 检查 glibc 2.38+ 兼容性 ====="
+CURRENT_SUB="$(extract_sublevel)"
+if [[ ! "$CURRENT_SUB" =~ ^[0-9]+$ ]]; then
+  warn "无法解析 SUBLEVEL(得到 '$CURRENT_SUB')，按需要修复处理"
+  CURRENT_SUB=99999
+fi
+
+NEEDS_GLIBC_FIX=false
+if [[ "$ANDROID_VERSION" == "android14" && "$KERNEL_VERSION" == "6.1" && "$CURRENT_SUB" -le 43 ]]; then
+  NEEDS_GLIBC_FIX=true
+fi
+
+if $NEEDS_GLIBC_FIX; then
+  GLIBC_VERSION="$(ldd --version 2>/dev/null | head -n 1 | awk '{print $NF}')"
+  if [[ -n "$GLIBC_VERSION" ]] && \
+     [[ "$(printf '%s\n' "2.38" "$GLIBC_VERSION" | sort -V | head -n1)" == "2.38" ]]; then
+    log "glibc $GLIBC_VERSION >= 2.38 且 SUBLEVEL=$CURRENT_SUB，应用 EXTRA_CFLAGS 修复"
+
+    rbf="$COMMON/tools/bpf/resolve_btfids/Makefile"
+    if [[ -f "$rbf" ]]; then
+      # 给子 make 传入 EXTRA_CFLAGS，使 host 工具按当前 glibc 的 ABI 链接
+      sed -i '/\$(Q)\$(MAKE) -C \$(SUBCMD_SRC) OUTPUT=\$(abspath \$(dir \$@))\/ \$(abspath \$@)/s//$(Q)$(MAKE) -C $(SUBCMD_SRC) EXTRA_CFLAGS="$(CFLAGS)" OUTPUT=$(abspath $(dir $@))\/ $(abspath $@)/' "$rbf" 2>/dev/null || true
+      if grep -q 'EXTRA_CFLAGS' "$rbf"; then
+        log "  resolve_btfids/Makefile 已注入 EXTRA_CFLAGS"
+      else
+        warn "  resolve_btfids/Makefile 未匹配到目标行，链接错误可能仍会出现"
+      fi
+    else
+      warn "未找到 $rbf，跳过 glibc 修复"
+    fi
+
+    # 5.10/5.15 还需要改写 parse-options.c 的 for 循环声明(C99 声明位置问题)。
+    # 6.1 已修正，这里仅对旧版内核生效，保持与上游一致。
+    if [[ "$KERNEL_VERSION" == "5.10" || "$KERNEL_VERSION" == "5.15" ]]; then
+      po="$COMMON/tools/lib/subcmd/parse-options.c"
+      if [[ -f "$po" ]]; then
+        sed -i '/char \*buf = NULL;/a int i;' "$po" 2>/dev/null || true
+        sed -i 's/for (int i = 0; subcommands\[i\]; i++) {/for (i = 0; subcommands[i]; i++) {/' "$po" 2>/dev/null || true
+        log "  parse-options.c 已改写(5.10/5.15)"
+      fi
+    fi
+  else
+    log "glibc ${GLIBC_VERSION:-未知} < 2.38，无需修复"
+  fi
+else
+  log "SUBLEVEL=$CURRENT_SUB 不在需要 glibc 修复的范围内，跳过"
+fi
+
 # ==================== 8. 基础内核配置 fragment ====================
 log "===== 8. 生成基础内核配置 fragment ====="
 
