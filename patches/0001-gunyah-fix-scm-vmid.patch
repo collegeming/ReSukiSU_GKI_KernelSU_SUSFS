@@ -1,13 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: GunyahFix <builder@users.noreply.github.com>
+Date: Wed, 16 Jul 2026 00:00:00 +0800
+Subject: [PATCH] gunyah: fix SCM VMID handling for SM8650 (GKI compatible)
+
+GKI android14-6.1 kernel hardcodes QCOM_SCM_VMID_HLOS as the source
+VMID for memory share/reclaim operations. On SM8650 (Snapdragon 8 Gen 3),
+this can cause SCM assign to fail when the caller's actual VMID differs
+from HLOS.
+
+Use gh_rm_get_vmid() to get the correct self VMID, and add a
+qcom_scm_map_vmid() helper for managed VMID mapping.
+
+This is a GKI-compatible version of the Samsung SM8650 fix, using
+arm_smccc_1_1_invoke() instead of arm_smccc_1_1_smc().
+
+Based on: https://github.com/Andy312432/android_kernel_samsung_sm8650_gunyah
+Fixes: DroidVM Out of memory (os error 12) on SM8650
+---
+ drivers/virt/gunyah/gunyah_qcom.c | 53 ++++++++++++++++++++++---------
+ 1 file changed, 38 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/virt/gunyah/gunyah_qcom.c b/drivers/virt/gunyah/gunyah_qcom.c
 --- a/drivers/virt/gunyah/gunyah_qcom.c
 +++ b/drivers/virt/gunyah/gunyah_qcom.c
-@@ -14,12 +14,29 @@
+@@ -15,12 +15,24 @@
  #define QCOM_SCM_RM_MANAGED_VMID	0x3A
  #define QCOM_SCM_MAX_MANAGED_VMID	0x3F
  
-+/*
-+ * ACL 里带的是 RM 管理的 VMID；超出 SCM 可管理范围的用 RM 哨兵值代替。
-+ * 抽成 helper 让 share / reclaim 共用同一套映射，避免两处判定漂移。
-+ */
 +static u16 qcom_scm_map_vmid(u16 vmid)
 +{
 +	if (vmid <= QCOM_SCM_MAX_MANAGED_VMID)
@@ -20,18 +39,17 @@
  {
  	struct qcom_scm_vmperm *new_perms;
  	u64 src, src_cpy;
- 	int ret = 0, i, n, rb_ret;
+ 	int ret = 0, i, n;
 -	u16 vmid;
 +	u16 self_vmid, vmid;
 +
-+	/* 借出内存的 source 必须是本机(HLOS)真实 VMID，写死会被 RM 拒绝 */
 +	ret = gh_rm_get_vmid(rm, &self_vmid);
 +	if (ret)
 +		return ret;
  
  	new_perms = kcalloc(mem_parcel->n_acl_entries, sizeof(*new_perms), GFP_KERNEL);
  	if (!new_perms)
-@@ -27,10 +44,7 @@
+@@ -28,10 +40,7 @@ static int qcom_scm_gh_rm_pre_mem_share(void *rm, struct gh_rm_mem_parcel *mem_p
  
  	for (n = 0; n < mem_parcel->n_acl_entries; n++) {
  		vmid = le16_to_cpu(mem_parcel->acl_entries[n].vmid);
@@ -43,7 +61,7 @@
  		if (mem_parcel->acl_entries[n].perms & GH_RM_ACL_X)
  			new_perms[n].perm |= QCOM_SCM_PERM_EXEC;
  		if (mem_parcel->acl_entries[n].perms & GH_RM_ACL_W)
-@@ -39,7 +53,7 @@
+@@ -40,7 +49,7 @@ static int qcom_scm_gh_rm_pre_mem_share(void *rm, struct gh_rm_mem_parcel *mem_p
  			new_perms[n].perm |= QCOM_SCM_PERM_READ;
  	}
  
@@ -52,7 +70,7 @@
  
  	for (i = 0; i < mem_parcel->n_mem_entries; i++) {
  		src_cpy = src;
-@@ -56,10 +70,7 @@
+@@ -57,10 +66,7 @@ static int qcom_scm_gh_rm_pre_mem_share(void *rm, struct gh_rm_mem_parcel *mem_p
  	src = 0;
  	for (n = 0; n < mem_parcel->n_acl_entries; n++) {
  		vmid = le16_to_cpu(mem_parcel->acl_entries[n].vmid);
@@ -64,7 +82,7 @@
  	}
  
  	new_perms[0].vmid = QCOM_SCM_VMID_HLOS;
-@@ -87,17 +98,18 @@
+@@ -79,17 +85,23 @@ static int qcom_scm_gh_rm_post_mem_reclaim(void *rm, struct gh_rm_mem_parcel *me
  	struct qcom_scm_vmperm new_perms;
  	u64 src = 0, src_cpy;
  	int ret = 0, i, n;
@@ -75,6 +93,11 @@
 +	if (ret)
 +		return ret;
  
++	/*
++	 * After reclaim, ownership must be restored to HLOS. Using the current
++	 * RM VMID here can make the SCM assign step reject the transfer on some
++	 * Qualcomm platforms.
++	 */
  	new_perms.vmid = QCOM_SCM_VMID_HLOS;
  	new_perms.perm = QCOM_SCM_PERM_EXEC | QCOM_SCM_PERM_WRITE | QCOM_SCM_PERM_READ;
  

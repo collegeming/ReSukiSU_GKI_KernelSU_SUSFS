@@ -192,7 +192,7 @@ jobs:
       - name: 安装编译依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y ccache python3 git curl build-essential libssl-dev bison flex libelf-dev dwarves
+          sudo apt-get install -y ccache python3 git curl patch build-essential libssl-dev bison flex libelf-dev dwarves
 
       # ==================== 配置 ccache ====================
       # ccache 用于缓存编译结果，加速后续构建
@@ -1226,6 +1226,52 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_MAP=y
           EOF
 
+      # ==================== 应用 Gunyah SM8650（骁龙 8 Gen 3）修复 ====================
+      # DroidVM 在 SM8650 上启动虚拟机被固件拒绝（RM rejected 56000004 / ENODEV）：
+      #   1) gunyah_qcom.c  SCM VMID 硬编码 HLOS，内存 lend/share 的 assign 被拒
+      #   2) vm_mgr_mm.c    大 guest 的 pin 页指针数组走 kcalloc 高阶分配，碎片下失败
+      # 两者都只作用于 common/（GKI）树：vm_mgr_mm 内建进 Image；
+      # gunyah_qcom 按 GKI 默认以模块方式产出 gunyah_qcom.ko
+      # （刷机时用于替换 vendor_boot ramdisk 中的同名词模块）。
+      - name: 应用 Gunyah SM8650 修复
+        working-directory: ${{ env.KERNEL_ROOT }}/common
+        run: |
+          set -euo pipefail
+
+          apply_gunyah_patch() {
+            local p="$1"
+            if git apply --check "$p" 2>/dev/null; then
+              git apply "$p"
+              echo "已应用: $(basename "$p")"
+            elif patch -p1 -F3 --dry-run -s -i "$p" >/dev/null 2>&1; then
+              patch -p1 -F3 -s -i "$p"
+              echo "已应用 (patch -F3): $(basename "$p")"
+            else
+              echo "::error::Gunyah 修复补丁无法应用: $p"
+              git apply --verbose "$p" 2>&1 | head -30 || true
+              exit 1
+            fi
+          }
+
+          apply_gunyah_patch "$GITHUB_WORKSPACE/patches/0001-gunyah-fix-scm-vmid.patch"
+          apply_gunyah_patch "$GITHUB_WORKSPACE/patches/0002-gunyah-kvcalloc-large-guest.patch"
+
+          grep -q "qcom_scm_map_vmid" drivers/virt/gunyah/gunyah_qcom.c
+          grep -q "kvcalloc" drivers/virt/gunyah/vm_mgr_mm.c
+
+          # GKI 默认不启用 GUNYAH_QCOM_PLATFORM，加入 GKI 模块清单才会真正编译产出
+          if ! grep -q "gunyah_qcom.ko" modules.bzl; then
+            sed -i 's|^_COMMON_GKI_MODULES_LIST = \[|_COMMON_GKI_MODULES_LIST = [\n    "drivers/virt/gunyah/gunyah_qcom.ko",|' modules.bzl
+          fi
+
+          {
+            echo "CONFIG_GUNYAH_QCOM_PLATFORM=m"
+            echo "CONFIG_QCOM_SCM=m"
+          } >> "$DEFCONFIG"
+
+          grep -n "gunyah_qcom.ko" modules.bzl
+          tail -5 "$DEFCONFIG"
+
       # ==================== 配置内核名称 ====================
       - name: 配置内核名称
         working-directory: ${{ env.KERNEL_ROOT }}
@@ -1394,6 +1440,22 @@ jobs:
 
           cp "$SRC_DIR/Image" ./
 
+      # ==================== 提取 Gunyah 模块产物 ====================
+      # gunyah_qcom.ko 是 VMID 修复的落地点：需替换 vendor_boot ramdisk 内同名词模块，
+      # 因此随构建产物一起上传，方便下载后重打包 vendor_boot。
+      - name: 提取 Gunyah 模块产物
+        run: |
+          KO="$(find "$KERNEL_ROOT/bazel-bin/common/kernel_aarch64" -name 'gunyah_qcom.ko' 2>/dev/null | head -1)"
+          if [ -z "$KO" ]; then
+            KO="$(find "$KERNEL_ROOT/bazel-bin/common/kernel_aarch64_dist" -name 'gunyah_qcom.ko' 2>/dev/null | head -1)"
+          fi
+          if [ -n "$KO" ]; then
+            cp "$KO" ./gunyah_qcom.ko
+            ls -la ./gunyah_qcom.ko
+          else
+            echo "::warning::未找到 gunyah_qcom.ko，本次产物的 Gunyah VMID 修复将无法交付"
+          fi
+
       # ==================== 创建 AnyKernel3 压缩包 ====================
       - name: 创建 AnyKernel3 压缩包
         run: |
@@ -1498,6 +1560,7 @@ jobs:
           name: ReSukiSU_kernel-${{ env.CONFIG }}
           path: |
             *AnyKernel3.zip
+            gunyah_qcom.ko
 #            *.img
           compression-level: 0
 
