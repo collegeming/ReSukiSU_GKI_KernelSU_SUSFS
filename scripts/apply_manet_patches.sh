@@ -435,33 +435,46 @@ if $GUNYAH_FIX; then
       continue
     fi
 
-    found=false
+    applied=false
     for TREE in "${KSU_TREES[@]}"; do
       TARGET="$TREE/drivers/virt/gunyah/$FNAME"
       [[ -f "$TARGET" ]] || continue
 
-      # 已应用则跳过(apply_required_patch 自带 reverse-dry-run 检测)
+      # 已修则跳过
       if grep -qF "$MARK" "$TARGET" 2>/dev/null; then
-        log "  $TREE/$FNAME 已是修复后状态，跳过"
-        found=true
+        log "  ${TREE#$WORKSPACE/}/drivers/virt/gunyah/$FNAME 已是修复后状态"
+        applied=true
         continue
       fi
 
-      (
-        cd "$TREE"
-        apply_required_patch "$PPATH" 1
-      )
+      # 允许逐树跳过: common/ 与 msm-kernel/ 的同一文件来自不同上游
+      # (AOSP ACK vs Xiaomi BSP)，顶部上下文可能有细微差异。
+      # 只要目标函数结构一致就修；不一致的那棵树跳过并告警，不中断整个构建。
+      # 注意 common/ 的 gunyah_qcom.c 实际不参与编译 —— GKI defconfig 里
+      # CONFIG_GUNYAH_QCOM_PLATFORM 未设置，设备上跑的是 msm-kernel 编出的
+      # 厂商模块，因此真正必须修的是 msm-kernel 那棵。
+      if ! ( cd "$TREE" && patch --forward --dry-run -p1 < "$PPATH" >/dev/null 2>&1 ); then
+        if ( cd "$TREE" && patch --reverse --dry-run -p1 < "$PPATH" >/dev/null 2>&1 ); then
+          log "  ${TREE#$WORKSPACE/}/$FNAME 已应用，跳过"
+          applied=true
+        else
+          warn "  ${TREE#$WORKSPACE/}/$FNAME 上下文不匹配($PNAME)，跳过该树"
+        fi
+        continue
+      fi
+
+      ( cd "$TREE" && apply_required_patch "$PPATH" 1 )
 
       if grep -qF "$MARK" "$TARGET" 2>/dev/null; then
         log "  校验通过: ${TREE#$WORKSPACE/}/drivers/virt/gunyah/$FNAME ($MARK)"
-        found=true
+        applied=true
       else
-        die "Gunyah 校验失败: $TARGET 未出现 $MARK"
+        warn "  校验未命中: $TARGET 未出现 $MARK"
       fi
     done
 
-    if ! $found; then
-      warn "两棵树都未找到 drivers/virt/gunyah/$FNAME，跳过该补丁"
+    if ! $applied; then
+      die "Gunyah 补丁 $PNAME 在两棵树都未能应用，无法确认修复生效"
     fi
   done
 fi
