@@ -37,6 +37,9 @@ SUSFS=true
 CVE=false
 USE_ZRAM=false
 USE_BBG=false
+# Gunyah SM8650 虚拟机启动修复：默认开启
+# 只作用于 msm-kernel/ 平台层，与 GKI 侧补丁互不影响；关掉用 --no-gunyah-fix
+GUNYAH_FIX=true
 # Droidspaces 进阶能力：默认关闭，按需用 --droidspaces-extras 打开
 DROIDSPACES_EXTRAS=false
 KSU_REF="main"
@@ -55,6 +58,8 @@ usage() {
   --enable-susfs           启用 SUSFS (默认)
   --disable-susfs         禁用 SUSFS
   --cve                   应用 CVE-2026-43499 rtmutex 修复链
+  --gunyah-fix            应用 Gunyah SM8650 虚拟机启动修复 (默认开启)
+  --no-gunyah-fix         跳过 Gunyah SM8650 虚拟机启动修复
   --use-zram              启用 ZRAM LZ4 增强补丁栈
   --use-bbg               启用 BBG 防格机
   --ksu-ref REF           ReSukiSU 分支/提交 (默认 main)
@@ -78,6 +83,10 @@ while [[ $# -gt 0 ]]; do
       SUSFS=false; shift ;;
     --cve)
       CVE=true; shift ;;
+    --gunyah-fix)
+      GUNYAH_FIX=true; shift ;;
+    --no-gunyah-fix)
+      GUNYAH_FIX=false; shift ;;
     --use-zram)
       USE_ZRAM=true; shift ;;
     --use-bbg)
@@ -322,6 +331,49 @@ EOF
     warn "        及「开机完成时关闭」选项，保持常驻关闭。"
     warn "  说明: 这是官方标注的已知限制，不是本脚本的缺陷，"
     warn "        内核编译层面无法规避，只能通过上述设置规避。"
+  fi
+fi
+
+# ==================== 2.5 Gunyah SM8650 虚拟机启动修复 ====================
+# 小米 manet (SM8650 / 8 Gen 3) 的 Gunyah 存在两个缺陷，会导致 DroidVM 等
+# 基于 crosvm+Gunyah 的虚拟机管理器无法创建虚拟机：
+#   1) gh_vm_mem_alloc() 用高阶 kcalloc 分配 pinned page 指针数组
+#      (4 GiB 客机即需 8 MiB)，碎片化后失败 -> "Out of memory (os error 12)"
+#   2) SCM VMID 映射错误 -> RM 拒绝 mem parcel -> "No such device (os error 19)"
+# 补丁移植自 DroidVM 官方 FAQ 给出的两个上游修复，作用于 msm-kernel/ 平台层
+# (gunyah_qcom.c 由 CONFIG_GUNYAH_QCOM_PLATFORM 门控，属 Xiaomi BSP)。
+if $GUNYAH_FIX; then
+  log "===== 2.5 应用 Gunyah SM8650 启动修复 ====="
+
+  gunyah_patch="$REPO_ROOT/patches/0003-gunyah-sm8650-startup-fix.patch"
+  if [[ ! -f "$gunyah_patch" ]]; then
+    warn "Gunyah 修复补丁不存在，跳过: $gunyah_patch"
+  else
+    # 补丁路径带 msm-kernel/ 前缀，故在 WORKSPACE 根目录以 -p1 应用。
+    # 为不污染调用者的 cwd，在子 shell 中切换目录。
+    if [[ ! -d "$WORKSPACE/msm-kernel/drivers/virt/gunyah" ]]; then
+      warn "未找到 msm-kernel/drivers/virt/gunyah，跳过 Gunyah 修复"
+    else
+      (
+        cd "$WORKSPACE"
+        apply_required_patch "$gunyah_patch" 1
+      )
+
+      # 确认两个改动点都落到源码里 (避免补丁"成功"但实际没改到目标函数)
+      if grep -q 'kvcalloc(mapping->npages' \
+           "$WORKSPACE/msm-kernel/drivers/virt/gunyah/vm_mgr_mm.c" 2>/dev/null; then
+        log "  校验通过: vm_mgr_mm.c 已使用 kvcalloc"
+      else
+        die "kvcalloc 校验失败: vm_mgr_mm.c 未出现 kvcalloc(mapping->npages"
+      fi
+
+      if grep -q 'qcom_scm_map_vmid' \
+           "$WORKSPACE/msm-kernel/drivers/virt/gunyah/gunyah_qcom.c" 2>/dev/null; then
+        log "  校验通过: gunyah_qcom.c 已使用 qcom_scm_map_vmid"
+      else
+        die "VMID 校验失败: gunyah_qcom.c 未出现 qcom_scm_map_vmid"
+      fi
+    fi
   fi
 fi
 
