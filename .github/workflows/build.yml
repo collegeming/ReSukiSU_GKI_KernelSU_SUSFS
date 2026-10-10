@@ -1259,17 +1259,22 @@ jobs:
           grep -q "qcom_scm_map_vmid" drivers/virt/gunyah/gunyah_qcom.c
           grep -q "kvcalloc" drivers/virt/gunyah/vm_mgr_mm.c
 
-          # GKI 默认不启用 GUNYAH_QCOM_PLATFORM，加入 GKI 模块清单才会真正编译产出
-          if ! grep -q "gunyah_qcom.ko" modules.bzl; then
-            sed -i 's|^_COMMON_GKI_MODULES_LIST = \[|_COMMON_GKI_MODULES_LIST = [\n    "drivers/virt/gunyah/gunyah_qcom.ko",|' modules.bzl
-          fi
+          # GKI 默认不启用 GUNYAH_QCOM_PLATFORM，且 qcom-scm 也不在清单里；
+          # 两者都必须进 GKI 模块清单，否则 Kleaf 报 "modules built but not copied"
+          add_gki_module() {
+            local want="$1"
+            grep -q "\"$want\"" modules.bzl && return 0
+            sed -i "s|^_COMMON_GKI_MODULES_LIST = \[|_COMMON_GKI_MODULES_LIST = [\n    \"$want\",|" modules.bzl
+          }
+          add_gki_module "drivers/virt/gunyah/gunyah_qcom.ko"
+          add_gki_module "drivers/firmware/qcom-scm.ko"
 
           {
             echo "CONFIG_GUNYAH_QCOM_PLATFORM=m"
             echo "CONFIG_QCOM_SCM=m"
           } >> "$DEFCONFIG"
 
-          grep -n "gunyah_qcom.ko" modules.bzl
+          grep -n "gunyah_qcom.ko\|qcom-scm.ko" modules.bzl
           tail -5 "$DEFCONFIG"
 
       # ==================== 配置内核名称 ====================
