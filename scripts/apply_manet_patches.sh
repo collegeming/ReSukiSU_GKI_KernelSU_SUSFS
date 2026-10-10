@@ -242,48 +242,67 @@ frag_add_if_exists() {
 }
 
 # ==================== 1. KernelSU (ReSukiSU) ====================
-# 注意: manet 工作区是双树结构 —— common/ 是 repo sync 出来的 GKI 内核主体，
-# msm-kernel/ 是 Xiaomi BSP 平台层。Bazel 目标 manet_gki_config 会把 ksu.fragment
-# 施加到 common/ 的配置上，所以 KernelSU 必须装进 common/：
-# setup.sh 会以「当前工作目录」为基准去改 drivers/Kconfig、drivers/Makefile 并
-# 放置 KernelSU/ 源码。若在 $WORKSPACE 根目录执行，改动会落在仓库根而不是内核树里，
-# 结果是 CONFIG_KSU 无人声明；Bazel 配置校验随即报
-#   CONFIG_KSU: actual '', expected 'CONFIG_KSU=y' from common/.../ksu.fragment
-# 并让整个构建失败(这正是 kernel-manet.yml 一直失败的原因)。
+# manet 工作区是双树结构: common/ 是 repo sync 出来的 GKI 内核主体(承载 ksu.fragment
+# 与 Bazel 的 //common: 包)，msm-kernel/ 是 Xiaomi BSP 平台层。
+#
+# ReSukiSU 的 setup.sh 用 GKI_ROOT=$(pwd) 推导路径，并检查 $GKI_ROOT/common/drivers，
+# 因此必须在 $WORKSPACE(即 GKI_ROOT) 下执行 —— 它会:
+#   - 把 KernelSU/ 源码放在 $WORKSPACE/KernelSU
+#   - 在 common/drivers/ 建一个 symlink: kernelsu -> ../../KernelSU/kernel
+#   - 往 common/drivers/Makefile 追加 obj-$(CONFIG_KSU) += kernelsu/
+#   - 往 common/drivers/Kconfig 的「第一个 endmenu 之前」插入 source "drivers/kernelsu/Kconfig"
+#
+# 两个必须自己补的坑:
+#
+#  ① symlink 出树:Bazel 收包时不跟随指向包外的 symlink，common/drivers/kernelsu 会
+#     被当成空目录，于是 CONFIG_KSU 无人声明。Bazel 配置校验随即报
+#       CONFIG_KSU: actual '', expected 'CONFIG_KSU=y' from common/.../ksu.fragment
+#       Are they declared in Kconfig?
+#     这就是 kernel-manet.yml 一直失败的直接原因(纯 make 的 build.yml 不受影响，
+#     因为 make 会正常跟随 symlink)。处置: 把 symlink 换成真实拷贝。
+#
+#  ② source 行位置:setup.sh 插在「第一个 endmenu」之前，若该 endmenu 处于某个
+#     条件块内，source 会被跳过。这里统一改放到文件末尾(顶层、无条件生效)。
 log "===== 1. 添加 ReSukiSU (ref: $KSU_REF) ====="
 (
-  cd "$COMMON"
+  cd "$WORKSPACE"
   curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s "$KSU_REF"
 )
 
-# 验证 KernelSU 已安装到 GKI 树 (而非工作区根目录)
-if [[ ! -d "$COMMON/KernelSU" ]]; then
-  # 兼容旧行为：若落在了工作区根目录，移到 common/ 下并重做 Kconfig/Makefile 关联
-  if [[ -d "$WORKSPACE/KernelSU" ]]; then
-    warn "KernelSU 落在了工作区根目录(预期在 common/)，正在迁移"
-    mv "$WORKSPACE/KernelSU" "$COMMON/KernelSU"
-  else
-    die "ReSukiSU 安装失败: $COMMON/KernelSU 不存在"
-  fi
+# KernelSU 源码由 setup.sh 放在 GKI_ROOT 下
+KSU_SRC="$WORKSPACE/KernelSU"
+KDIR="$COMMON/drivers"
+[[ -d "$KSU_SRC" ]] || die "ReSukiSU 安装失败: $KSU_SRC 不存在"
+[[ -d "$KDIR" ]] || die "GKI 树缺少 drivers 目录: $KDIR"
+
+# ① symlink -> 真实目录 (Bazel 不跨包跟随 symlink)
+if [[ -L "$KDIR/kernelsu" ]]; then
+  log "把 common/drivers/kernelsu 的 symlink 换成真实拷贝(Bazel 需要)"
+  rm -f "$KDIR/kernelsu"
+  cp -r "$KSU_SRC/kernel" "$KDIR/kernelsu"
+elif [[ ! -d "$KDIR/kernelsu" ]]; then
+  warn "setup.sh 未建立 kernelsu 链接，手动拷贝"
+  cp -r "$KSU_SRC/kernel" "$KDIR/kernelsu"
+fi
+[[ -f "$KDIR/kernelsu/Kconfig" ]] || die "kernelsu/Kconfig 缺失，KernelSU 源码不完整"
+
+# Makefile: 挂上 obj-$(CONFIG_KSU) += kernelsu/
+grep -q 'kernelsu' "$KDIR/Makefile" 2>/dev/null \
+  || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> "$KDIR/Makefile"
+
+# ② Kconfig: 确保 source 行存在且位于顶层(文件末尾)
+if ! grep -q 'drivers/kernelsu/Kconfig' "$KDIR/Kconfig" 2>/dev/null; then
+  # 清掉 setup.sh 可能插在嵌套块里的那一行，避免重复 source
+  sed -i '/drivers\/kernelsu\/Kconfig/d' "$KDIR/Kconfig" 2>/dev/null || true
+  printf '\nsource "drivers/kernelsu/Kconfig"\n' >> "$KDIR/Kconfig"
+  log "已在 common/drivers/Kconfig 末尾追加 source 行"
 fi
 
-# 确认 Kconfig/Makefile 已在内核树里挂上 KernelSU 驱动
-if ! grep -qE 'KernelSU' "$COMMON/drivers/Kconfig" 2>/dev/null; then
-  warn "common/drivers/Kconfig 未引用 KernelSU，手动补 source 行"
-  grep -q 'source "drivers/kernelsu/Kconfig"' "$COMMON/drivers/Kconfig" 2>/dev/null \
-    || echo 'source "drivers/kernelsu/Kconfig"' >> "$COMMON/drivers/Kconfig"
+# 校验 CONFIG_KSU 确实被声明 (grep -R 才会跟随 symlink；此处已是真实目录)
+if ! grep -RqsE '^[[:space:]]*(menu)?config[[:space:]]+KSU$' "$KDIR/kernelsu" 2>/dev/null; then
+  die "kernelsu/Kconfig 中找不到 config KSU 声明，KernelSU 集成不完整"
 fi
-if ! grep -qE 'kernelsu' "$COMMON/drivers/Makefile" 2>/dev/null; then
-  warn "common/drivers/Makefile 未引用 KernelSU，手动补 obj 行"
-  grep -q 'kernelsu' "$COMMON/drivers/Makefile" 2>/dev/null \
-    || echo 'obj-$(CONFIG_KSU) += kernelsu/' >> "$COMMON/drivers/Makefile"
-fi
-
-# 声明 CONFIG_KSU 的 Kconfig 符号，确保 fragment 校验能通过
-if ! grep -rqsE '^[[:space:]]*(menu)?config[[:space:]]+KSU$' "$COMMON/drivers" 2>/dev/null; then
-  die "common/ 中找不到 config KSU 声明，KernelSU 集成不完整"
-fi
-log "ReSukiSU 安装完成 (common/)"
+log "ReSukiSU 安装完成 (源码: $KSU_SRC, 驱动: $KDIR/kernelsu)"
 
 # ==================== 2. SUSFS ====================
 if $SUSFS; then
