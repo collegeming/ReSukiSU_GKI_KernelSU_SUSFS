@@ -704,18 +704,23 @@ if $NEEDS_GLIBC_FIX; then
      [[ "$(printf '%s\n' "2.38" "$GLIBC_VERSION" | sort -V | head -n1)" == "2.38" ]]; then
     log "glibc $GLIBC_VERSION >= 2.38 且 SUBLEVEL=$CURRENT_SUB，应用 EXTRA_CFLAGS 修复"
 
-    rbf="$COMMON/tools/bpf/resolve_btfids/Makefile"
-    if [[ -f "$rbf" ]]; then
+    # 两棵树都要修: 构建日志显示真正被编译的 resolve_btfids 位于
+    #   out/cache/<hash>/msm-kernel/tools/bpf/resolve_btfids/
+    # 即 msm-kernel 那棵；只修 common/ 时错误照旧。
+    for TREE in "${KSU_TREES[@]}"; do
+      rbf="$TREE/tools/bpf/resolve_btfids/Makefile"
+      if [[ ! -f "$rbf" ]]; then
+        warn "未找到 $rbf，跳过"
+        continue
+      fi
       # 给子 make 传入 EXTRA_CFLAGS，使 host 工具按当前 glibc 的 ABI 链接
       sed -i '/\$(Q)\$(MAKE) -C \$(SUBCMD_SRC) OUTPUT=\$(abspath \$(dir \$@))\/ \$(abspath \$@)/s//$(Q)$(MAKE) -C $(SUBCMD_SRC) EXTRA_CFLAGS="$(CFLAGS)" OUTPUT=$(abspath $(dir $@))\/ $(abspath $@)/' "$rbf" 2>/dev/null || true
       if grep -q 'EXTRA_CFLAGS' "$rbf"; then
-        log "  resolve_btfids/Makefile 已注入 EXTRA_CFLAGS"
+        log "  ${TREE#$WORKSPACE/}: resolve_btfids/Makefile 已注入 EXTRA_CFLAGS"
       else
-        warn "  resolve_btfids/Makefile 未匹配到目标行，链接错误可能仍会出现"
+        warn "  ${TREE#$WORKSPACE/}: 未匹配到目标行，链接错误可能仍会出现"
       fi
-    else
-      warn "未找到 $rbf，跳过 glibc 修复"
-    fi
+    done
 
     # 5.10/5.15 还需要改写 parse-options.c 的 for 循环声明(C99 声明位置问题)。
     # 6.1 已修正，这里仅对旧版内核生效，保持与上游一致。
